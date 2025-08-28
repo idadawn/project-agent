@@ -145,7 +145,7 @@ class CoordinatorAgent(BaseAgent):
         context.project_state["current_stage"] = "document_parsing"
         
         return AgentResponse(
-            content="🤝 **Coordinator 智能体**: 检测到文件上传，自动启动文档解析流程。\n\n📋 **处理流程**:\n1. 📄 文档解析 → 2. 🔍 关键信息提取 → 3. 📝 投标方案生成\n\n🚀 正在启动文档解析阶段...",
+            content="🤝 **Coordinator 智能体**: 检测到文件上传，自动启动处理。\n\n📋 **最小落地流程（A–E）**：\nA 结构抽取 → B 技术规格书 → C 方案提纲/草稿 → D 拼装草案 → E 完整性校验\n\n🚀 正在启动文档解析阶段...",
             metadata={
                 "current_agent": "coordinator",
                 "stage": "document_parsing",
@@ -164,7 +164,7 @@ class CoordinatorAgent(BaseAgent):
             context.project_state["current_stage"] = "document_parsing"
             
             return AgentResponse(
-                content="🤝 **Coordinator 智能体**: 检测到招标文件上传，开始处理流程。\n\n📋 **处理流程**:\n1. 📄 文档解析 → 2. 🔍 关键信息提取 → 3. 📝 投标方案生成\n\n🚀 正在启动文档解析阶段...",
+                content="🤝 **Coordinator 智能体**: 检测到招标文件上传，开始处理流程。\n\n📋 **最小落地流程（A–E）**：\nA 结构抽取 → B 技术规格书 → C 方案提纲/草稿 → D 拼装草案 → E 完整性校验\n\n🚀 正在启动文档解析阶段...",
                 metadata={
                     "current_agent": "coordinator",
                     "stage": "document_parsing",
@@ -378,8 +378,12 @@ class CoordinatorAgent(BaseAgent):
         """协调最小落地版 A–E 工作流（结构→规格→提纲→拼装→校验）"""
         context.project_state = context.project_state or {}
         # 优先使用文档解析产出的标准路径；若不存在，则依然允许A–E以兜底模板运行
-        tender_path = "/root/project/git/project-agent/wiki/招标文件.md"
-        wiki_dir = "wiki"
+        from backend.app_core.config import settings
+        tender_path = (
+            (context.project_state or {}).get("tender_path")
+            or settings.TENDER_DEFAULT_PATH
+        )
+        wiki_dir = settings.WIKI_DIR
         meta = context.project_state.get("meta", {}) if isinstance(context.project_state, dict) else {}
 
         try:

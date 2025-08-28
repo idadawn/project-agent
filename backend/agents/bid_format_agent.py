@@ -33,9 +33,9 @@ class BidFormatAgent(BaseAgent):
             content = format_text
 
             # 保存文件到 wiki 目录
-            proposal_dir = "/root/project/git/project-agent/wiki"
-            os.makedirs(proposal_dir, exist_ok=True)
-            proposal_path = os.path.join(proposal_dir, "投标文件.md")
+            from backend.app_core.config import settings
+            os.makedirs(settings.WIKI_DIR, exist_ok=True)
+            proposal_path = os.path.join(settings.WIKI_DIR, "投标文件.md")
             with open(proposal_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
@@ -67,7 +67,8 @@ class BidFormatAgent(BaseAgent):
     def _load_bid_format_text(self) -> str:
         """从 wiki/招标文件.md 精确截取‘第五章 投标文件格式’至下一章标题前的原文。"""
         # 回退：直接从wiki读取
-        wiki_path = "/root/project/git/project-agent/wiki/招标文件.md"
+        from backend.app_core.config import settings
+        wiki_path = os.path.join(settings.WIKI_DIR, "招标文件.md")
         if os.path.exists(wiki_path):
             with open(wiki_path, "r", encoding="utf-8") as f:
                 md_text = f.read()

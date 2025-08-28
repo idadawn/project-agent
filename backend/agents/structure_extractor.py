@@ -19,6 +19,12 @@ CANONICAL_SECTIONS = [
 class StructureExtractor(BaseAgent):
     name = "structure_extractor"
 
+    def __init__(self):
+        super().__init__("structure_extractor")
+
+    def get_system_prompt(self) -> str:
+        return "你是投标文件结构抽取专家，从招标文件中抽取投标文件格式要求，生成标准投标文件骨架。"
+
     def _find_bid_format_block(self, text: str) -> Tuple[int,int]:
         start_pat = r"^#{1,6}\s*第\s*[五5V]\s*章.*?(投标文件格式|投标文件|投标文件格式[（(]样式[）)])"
         end_pat = r"^#{1,6}\s*第\s*[六6VI]\s*章|^#{1,6}\s*评标"

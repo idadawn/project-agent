@@ -33,6 +33,12 @@ PROMPT_FILE = os.path.join(os.path.dirname(__file__), "..", "prompts", "plan_out
 class PlanOutliner(BaseAgent):
     name = "plan_outliner"
 
+    def __init__(self):
+        super().__init__("plan_outliner")
+
+    def get_system_prompt(self) -> str:
+        return "你是方案提纲生成专家，根据技术规格书生成技术方案和施工方法的详细提纲。"
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
         wiki_dir = state.get("wiki_dir", "wiki")
         spec_path = state.get("spec_path")

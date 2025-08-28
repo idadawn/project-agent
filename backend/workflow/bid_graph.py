@@ -2,11 +2,11 @@
 from typing import Dict, Any
 from langgraph.graph import StateGraph, END
 
-from ..agents.structure_extractor import StructureExtractor
-from ..agents.spec_extractor import SpecExtractor
-from ..agents.plan_outliner import PlanOutliner
-from ..agents.bid_assembler import BidAssembler
-from ..agents.sanity_checker import SanityChecker
+from backend.agents.structure_extractor import StructureExtractor
+from backend.agents.spec_extractor import SpecExtractor
+from backend.agents.plan_outliner import PlanOutliner
+from backend.agents.bid_assembler import BidAssembler
+from backend.agents.sanity_checker import SanityChecker
 
 def build_bid_graph(State=dict):
     graph = StateGraph(State)
@@ -23,7 +23,7 @@ def build_bid_graph(State=dict):
     graph.add_edge("plan_outliner", "bid_assembler")
     graph.add_edge("bid_assembler", "sanity_checker")
     graph.add_edge("sanity_checker", END)
-    return graph
+    return graph.compile()
 
 def run_build(session_id: str, tender_path: str, wiki_dir="wiki", meta=None) -> Dict[str, Any]:
     graph = build_bid_graph()

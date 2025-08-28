@@ -17,6 +17,12 @@ MANDATORY_HINTS = [
 class SanityChecker(BaseAgent):
     name = "sanity_checker"
 
+    def __init__(self):
+        super().__init__("sanity_checker")
+
+    def get_system_prompt(self) -> str:
+        return "你是投标文件合规性校验专家，检查投标文件草案的完整性和合规性。"
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
         draft_path = state.get("draft_path")
         wiki_dir = state.get("wiki_dir", "wiki")

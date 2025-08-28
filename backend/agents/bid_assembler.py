@@ -13,6 +13,12 @@ except Exception:
 class BidAssembler(BaseAgent):
     name = "bid_assembler"
 
+    def __init__(self):
+        super().__init__("bid_assembler")
+
+    def get_system_prompt(self) -> str:
+        return "你是投标文件拼装专家，将骨架、方案提纲和技术规格书进行智能拼装生成投标文件草案。"
+
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
         wiki_dir = state.get("wiki_dir", "wiki")
         outline_path = state.get("outline_path")

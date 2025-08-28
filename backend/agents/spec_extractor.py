@@ -13,6 +13,12 @@ except Exception:
 class SpecExtractor(BaseAgent):
     name = "spec_extractor"
 
+    def __init__(self):
+        super().__init__("spec_extractor")
+
+    def get_system_prompt(self) -> str:
+        return "你是技术规格书抽取专家，从招标文件中精准定位并抽取第四章技术规格书内容。"
+
     START_PATS = [
         r"^#{1,6}\s*第\s*[四4IV]\s*章.*?(技术规格书|技术要求)",
     ]

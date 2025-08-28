@@ -37,7 +37,8 @@ class KeyExtractionAgent(BaseAgent):
             parsed_files = self._get_parsed_files()
             
             for parsed_file in parsed_files:
-                file_path = f"/root/project/git/project-agent/wiki/{parsed_file}"
+                from backend.app_core.config import settings
+                file_path = os.path.join(settings.WIKI_DIR, parsed_file)
                 if os.path.exists(file_path):
                     with open(file_path, 'r', encoding='utf-8') as f:
                         parsed_doc = json.load(f)
@@ -48,7 +49,8 @@ class KeyExtractionAgent(BaseAgent):
             
             # 回退策略：若未生成结构化JSON，直接从 wiki/招标文件.md 提取
             if not extracted_info:
-                wiki_path = "/root/project/git/project-agent/wiki/招标文件.md"
+                from backend.app_core.config import settings
+                wiki_path = os.path.join(settings.WIKI_DIR, "招标文件.md")
                 if os.path.exists(wiki_path):
                     with open(wiki_path, 'r', encoding='utf-8') as f:
                         md_content = f.read()
@@ -75,7 +77,8 @@ class KeyExtractionAgent(BaseAgent):
     
     def _get_parsed_files(self) -> List[str]:
         """获取wiki文件夹中的所有JSON文件"""
-        parsed_dir = "/root/project/git/project-agent/wiki"
+        from backend.app_core.config import settings
+        parsed_dir = settings.WIKI_DIR
         if not os.path.exists(parsed_dir):
             return []
         

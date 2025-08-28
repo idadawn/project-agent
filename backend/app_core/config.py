@@ -39,9 +39,13 @@ class Settings(BaseSettings):
         else:
             return ["http://localhost:3000", "http://localhost:8005"]
     
+    # Content directories
+    WIKI_DIR: str = "wiki"
+    UPLOAD_DIR: str = "uploads"
+    TENDER_DEFAULT_PATH: str = "uploads/招标文件.md"
+    
     # File Upload Settings
     MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50MB
-    UPLOAD_DIR: str = "./上传文件"
     
     # Logging Settings
     LOG_LEVEL: str = "INFO"
