@@ -1,0 +1,18 @@
+{
+  "filename": "1.docx",
+  "document_type": "DOCX招标文件",
+  "structure": [
+    {
+      "level": 1,
+      "title": "文档内容",
+      "content": "结构抽取失败，已保留原文用于后续处理",
+      "subsections": []
+    }
+  ],
+  "metadata": {
+    "file_size": 928929,
+    "markdown_saved": true,
+    "markdown_file": "招标文件.md",
+    "extracted": {}
+  }
+}

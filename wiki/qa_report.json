@@ -1,0 +1,6 @@
+{
+  "composition_complete": true,
+  "scoring_covered": true,
+  "schedule_constraints": false,
+  "safety_env_constraints": true
+}
