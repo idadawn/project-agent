@@ -113,6 +113,8 @@ export default function Home() {
 
   const [leftPanelWidth, setLeftPanelWidth] = useState(256)
   const [rightPanelWidth, setRightPanelWidth] = useState(400)
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false)
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false)
 
   return (
     <div className="flex h-screen bg-background">
@@ -123,7 +125,12 @@ export default function Home() {
         minSize={200}
         maxSize={500}
         onResize={setLeftPanelWidth}
+        position="left"
         className="flex flex-col border-r border-border"
+        collapsible={true}
+        collapsed={leftPanelCollapsed}
+        onToggleCollapse={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+        title="文件树"
       >
         <div className="p-4 border-b border-border">
           <h2 className="font-semibold text-base">文件</h2>
@@ -147,14 +154,14 @@ export default function Home() {
       </ResizablePanel>
 
       {/* Center Panel - Markdown Editor */}
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="p-4 border-b border-border">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="p-4 border-b border-border flex-shrink-0">
           <h2 className="font-semibold text-base">
             {selectedFile || '编辑器'}
           </h2>
         </div>
         
-        <div className="flex-1 overflow-hidden min-h-0">
+        <div className="flex-1 min-h-0 overflow-hidden">
           <MarkdownEditor
             content={getCurrentFileContent()}
             onChange={handleContentChange}
@@ -172,13 +179,18 @@ export default function Home() {
         minSize={400}
         maxSize={800}
         onResize={setRightPanelWidth}
+        position="right"
         className="flex flex-col border-l border-border"
+        collapsible={true}
+        collapsed={rightPanelCollapsed}
+        onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
+        title="聊天"
       >
-        <div className="p-4 border-b border-border">
-          <h2 className="font-semibold text-base">聊天</h2>
-        </div>
-        
-        <div className="flex-1 overflow-hidden">
+        <div className="flex flex-col h-full">
+          <div className="p-4 border-b border-border flex-shrink-0">
+            <h2 className="font-semibold text-base">聊天</h2>
+          </div>
+          
           <ChatPanel
             messages={messages}
             onSendMessage={sendMessage}
@@ -187,6 +199,7 @@ export default function Home() {
             loading={chatLoading}
             sessionId={sessionId}
             agentStatus={agentStatus}
+            onFilesCreated={addFiles}
           />
         </div>
       </ResizablePanel>

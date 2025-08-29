@@ -93,9 +93,9 @@ export function MarkdownEditor({
   }
 
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0 overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-3 border-b border-border bg-muted/30">
+      <div className="flex items-center justify-between p-3 border-b border-border bg-muted/30 flex-shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setMode('preview')}
@@ -142,9 +142,9 @@ export function MarkdownEditor({
       </div>
 
       {/* Content Area (inner scrolling only) */}
-      <div className="flex-1 min-h-0 flex">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {mode === 'edit' ? (
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <textarea
               ref={textareaRef}
               value={localContent}
@@ -197,7 +197,7 @@ export function MarkdownEditor({
 
       {/* Selection Indicator */}
       {selectedText && mode === 'preview' && (
-        <div className="p-3 bg-blue-50 border-t border-border">
+        <div className="p-3 bg-blue-50 border-t border-border flex-shrink-0">
           <p className="text-xs text-blue-700">
             Selected: "{selectedText.substring(0, 50)}{selectedText.length > 50 ? '...' : ''}"
           </p>

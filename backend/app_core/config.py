@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     
     # CORS
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8005"]
+    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8005", "http://localhost:11010"]
     
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod

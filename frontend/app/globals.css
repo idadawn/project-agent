@@ -127,3 +127,25 @@
 .prose blockquote {
   @apply border-l-4 border-border pl-4 italic text-muted-foreground mb-4;
 }
+
+/* Resizable panel styles */
+.resizing {
+  pointer-events: none;
+}
+
+.resizing * {
+  pointer-events: none;
+}
+
+.resizing [data-resize-handle] {
+  pointer-events: auto;
+}
+
+/* Resize handle hover effects */
+[data-resize-handle]:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+[data-resize-handle]:active {
+  background-color: rgba(59, 130, 246, 0.2);
+}

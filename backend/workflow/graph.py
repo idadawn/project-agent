@@ -51,8 +51,8 @@ class ProposalWorkflow:
         # 调试信息
         print(f"DEBUG _should_continue: current_stage = {current_stage}, iteration = {iteration_count + 1}")
         
-        # 检查是否应该结束工作流（保留最终完成态；放宽解析/提取完成态以便收到“继续执行”后推进）
-        if current_stage in ["completed", "generation_completed"]:
+        # 检查是否应该结束工作流（保留最终完成态；放宽解析/提取完成态以便收到"继续执行"后推进）
+        if current_stage in ["completed", "generation_completed", "bid_build_completed", "bid_build_failed"]:
             print(f"DEBUG _should_continue: Ending workflow due to completed stage: {current_stage}")
             return "end"
         
@@ -80,7 +80,13 @@ class ProposalWorkflow:
 
         # 由协调节点设置的临时阶段：请求解析 → 仅推进一次
         if current_stage == "parsing_requested":
+            # 检查是否已经处理过这个请求，防止无限循环
+            if state.get("parsing_requested_processed"):
+                print("DEBUG _should_continue: parsing_requested already processed, ending")
+                return "end"
             print("DEBUG _should_continue: parsing_requested → continue once")
+            # 标记为已处理，防止下次继续
+            state["parsing_requested_processed"] = True
             return "continue"
         
         # 检查最后一条消息的metadata中的next_actions
@@ -177,10 +183,10 @@ class ProposalWorkflow:
             state["current_stage"] = response.metadata["stage"]
             print(f"DEBUG: Updated current_stage from response metadata: {state['current_stage']}")
         
-        # 同步context.project_state中的状态更新到workflow state
+        # 同步context.project_state中的状态更新到workflow state（但不覆盖current_stage）
         if context.project_state:
-            # 确保current_stage是最新的
-            if "current_stage" in context.project_state:
+            # 只在response.metadata没有stage时才同步current_stage，防止覆盖coordinator的正确状态
+            if "stage" not in response.metadata and "current_stage" in context.project_state:
                 state["current_stage"] = context.project_state["current_stage"]
                 print(f"DEBUG: Synced current_stage from context: {state['current_stage']}")
             
@@ -198,6 +204,13 @@ class ProposalWorkflow:
         for key in ["plan", "research_results", "optimized_content"]:
             if key in response.metadata:
                 state[key] = response.metadata[key]
+        
+        # 关键修复：如果DocumentParserAgent更新了tender_path，同步到state和project_state
+        if "tender_path" in response.metadata:
+            state["tender_path"] = response.metadata["tender_path"]
+            if context.project_state:
+                context.project_state["tender_path"] = response.metadata["tender_path"]
+            print(f"DEBUG: Updated tender_path to: {response.metadata['tender_path']}")
         
         # 更新通用metadata
         state["metadata"].update(response.metadata)
@@ -224,7 +237,7 @@ class ProposalWorkflow:
                 print(f"DEBUG: Marked stage {current_stage} as processed")
         
         # 检查阶段是否应该结束：如果当前阶段是完成状态，则结束工作流
-        if current_stage in ["parsing_completed", "extraction_completed", "generation_completed", "completed"]:
+        if current_stage in ["parsing_completed", "extraction_completed", "generation_completed", "completed", "bid_build_completed", "bid_build_failed"]:
             print(f"DEBUG: Stage {current_stage} is completed, ending workflow")
             return state
         

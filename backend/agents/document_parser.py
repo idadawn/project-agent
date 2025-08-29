@@ -1,3 +1,6 @@
+"""
+文档解析智能体 - 负责解析上传的招标文件并生成结构化的Markdown文档
+"""
 from typing import Dict, Any, List
 import os
 import json
@@ -138,18 +141,37 @@ class DocumentParserAgent(BaseAgent):
                 with open(parsed_path, 'w', encoding='utf-8') as f:
                     json.dump(parsed_doc, f, ensure_ascii=False, indent=2)
             
+            # 检查是否成功生成了wiki/招标文件.md
+            wiki_tender_path = None
+            for created_file in files_to_create:
+                if created_file.get("name") == "招标文件.md" and created_file.get("type") == "wiki":
+                    wiki_tender_path = "wiki/招标文件.md"
+                    break
+            
             response_content = f"成功解析了 {len(parsed_documents)} 个文档，解析结果已保存到wiki文件夹。"
+            if wiki_tender_path:
+                response_content += f"\n\n📄 **解析结果**: 已生成 `{wiki_tender_path}` 用于后续A-E工作流。"
+            
             self.logger.info(f"[Summary] parsed_docs={len(parsed_documents)}, files_to_create={len(files_to_create)}")
+            
+            metadata = {
+                "parsed_documents": parsed_documents,
+                "parsed_files": [f"{doc['filename']}.json" for doc in parsed_documents],
+                "files_to_create": files_to_create,
+                # 直接输出两类核心要素，供后续阶段或UI使用
+                "extracted_info": aggregated_extracted,
+                "stage": "document_parsing",
+                "action": "parsing_completed"
+            }
+            
+            # 关键修复：如果成功生成了wiki/招标文件.md，更新tender_path用于后续工作流
+            if wiki_tender_path:
+                metadata["tender_path"] = wiki_tender_path
+                metadata["next_stage"] = "bid_build_ready"
             
             return AgentResponse(
                 content=response_content,
-                metadata={
-                    "parsed_documents": parsed_documents,
-                    "parsed_files": [f"{doc['filename']}.json" for doc in parsed_documents],
-                    "files_to_create": files_to_create,
-                    # 直接输出两类核心要素，供后续阶段或UI使用
-                    "extracted_info": aggregated_extracted
-                },
+                metadata=metadata,
                 status="completed"
             )
             
@@ -159,7 +181,7 @@ class DocumentParserAgent(BaseAgent):
                 status="error"
             )
     
-    async def _parse_document(self, file_path: str, filename: str) -> (Dict[str, Any], Dict[str, Any]):
+    async def _parse_document(self, file_path: str, filename: str) -> tuple[Dict[str, Any], Dict[str, Any]]:
         """解析单个文档，返回(结构化JSON, 生成的Markdown文件信息或None)"""
         file_ext = Path(file_path).suffix.lower()
         
@@ -172,7 +194,7 @@ class DocumentParserAgent(BaseAgent):
         else:
             raise ValueError(f"不支持的文件格式: {file_ext}")
     
-    async def _parse_pdf(self, file_path: str, filename: str) -> (Dict[str, Any], Dict[str, Any]):
+    async def _parse_pdf(self, file_path: str, filename: str) -> tuple[Dict[str, Any], Dict[str, Any]]:
         """解析PDF文档"""
         try:
             # 优先使用 microsoft/markitdown 将PDF转为Markdown
@@ -183,7 +205,7 @@ class DocumentParserAgent(BaseAgent):
             if md_text:
                 parsed_dir = "/root/project/git/project-agent/wiki"
                 os.makedirs(parsed_dir, exist_ok=True)
-                # 统一命名为“招标文件.md”
+                # 统一命名为"招标文件.md"
                 base_name = "招标文件.md"
                 md_path = os.path.join(parsed_dir, base_name)
                 with open(md_path, 'w', encoding='utf-8') as f:
@@ -224,11 +246,11 @@ class DocumentParserAgent(BaseAgent):
                         "file_size": os.path.getsize(file_path),
                         "raw_text": text_content[:5000]
                     }
-                }, created_md)
+                }, {})
         except Exception as e:
             raise Exception(f"PDF解析失败: {str(e)}")
     
-    async def _parse_docx(self, file_path: str, filename: str) -> (Dict[str, Any], Dict[str, Any]):
+    async def _parse_docx(self, file_path: str, filename: str) -> tuple[Dict[str, Any], Dict[str, Any]]:
         """解析DOCX文档"""
         try:
             # 使用 microsoft/markitdown 将Word转为Markdown
@@ -239,7 +261,7 @@ class DocumentParserAgent(BaseAgent):
             if md_text:
                 parsed_dir = "/root/project/git/project-agent/wiki"
                 os.makedirs(parsed_dir, exist_ok=True)
-                # 按需求统一命名为“招标文件.md”
+                # 按需求统一命名为"招标文件.md"
                 base_name = "招标文件.md"
                 md_path = os.path.join(parsed_dir, base_name)
                 with open(md_path, 'w', encoding='utf-8') as f:
@@ -263,24 +285,41 @@ class DocumentParserAgent(BaseAgent):
                 }, created_md)
 
             # 回退：python-docx 提取纯文本
-            import docx
-            doc = docx.Document(file_path)
-            text_content = "\n".join(p.text for p in doc.paragraphs)
-            structure = await self._analyze_document_structure(text_content, filename)
-            return ({
-                "filename": filename,
-                "document_type": "DOCX招标文件",
-                "structure": structure,
-                "metadata": {
-                    "total_paragraphs": len(doc.paragraphs),
-                    "file_size": os.path.getsize(file_path),
-                    "raw_text": text_content[:5000]
-                }
-            }, created_md)
+            try:
+                import docx
+                doc = docx.Document(file_path)
+                text_content = "\n".join(p.text for p in doc.paragraphs)
+                structure = await self._analyze_document_structure(text_content, filename)
+                return ({
+                    "filename": filename,
+                    "document_type": "DOCX招标文件",
+                    "structure": structure,
+                    "metadata": {
+                        "total_paragraphs": len(doc.paragraphs),
+                        "file_size": os.path.getsize(file_path),
+                        "raw_text": text_content[:5000]
+                    }
+                }, {})
+            except ImportError:
+                self.logger.warning("python-docx not available, creating basic structure")
+                return ({
+                    "filename": filename,
+                    "document_type": "DOCX招标文件",
+                    "structure": [{
+                        "level": 1,
+                        "title": "文档内容",
+                        "content": "需要安装python-docx来解析DOCX文件",
+                        "subsections": []
+                    }],
+                    "metadata": {
+                        "file_size": os.path.getsize(file_path),
+                        "parse_method": "fallback"
+                    }
+                }, {})
         except Exception as e:
             raise Exception(f"DOCX解析失败: {str(e)}")
     
-    async def _parse_txt(self, file_path: str, filename: str) -> (Dict[str, Any], Dict[str, Any]):
+    async def _parse_txt(self, file_path: str, filename: str) -> tuple[Dict[str, Any], Dict[str, Any]]:
         """解析TXT文档"""
         try:
             with open(file_path, 'r', encoding='utf-8') as file:
@@ -376,8 +415,7 @@ class DocumentParserAgent(BaseAgent):
         - 提取两类关键信息：投标文件格式结构、技术规格书
         返回: (structure: List[dict], extracted: dict)
         """
-        json_schema = (
-            """
+        json_schema = """
 {
   "structure": [...],
   "extracted": {
@@ -386,7 +424,6 @@ class DocumentParserAgent(BaseAgent):
   }
 }
 """
-        )
 
         analysis_prompt = (
             f"你将获得完整的招标文件（已转为Markdown）。\n"
@@ -395,8 +432,8 @@ class DocumentParserAgent(BaseAgent):
             "1) 解析并返回文档的层级结构（structure，数组）。\n"
             "   - 每个节点包含: level(1/2/3..), title, content摘要(<=300字), subsections[]\n"
             "2) 提取两类关键信息（extracted 对象）：\n"
-            "   - bid_format: 从“投标文件格式/投标文件内容/响应文件格式”等章节提取目录结构、装订顺序、章节要求。\n"
-            "   - tech_specifications: 从“技术规格书/技术要求”等章节提取关键技术指标与约束。\n\n"
+            "   - bid_format: 从"投标文件格式/投标文件内容/响应文件格式"等章节提取目录结构、装订顺序、章节要求。\n"
+            "   - tech_specifications: 从"技术规格书/技术要求"等章节提取关键技术指标与约束。\n\n"
             "请严格输出一个JSON对象：\n"
             f"{json_schema}\n"
             "全文Markdown（截断展示，不要回显原文）：\n"
@@ -438,3 +475,39 @@ class DocumentParserAgent(BaseAgent):
                 "content": f"结构分析失败: {str(e)}",
                 "subsections": []
             }], {})
+
+    async def _analyze_document_structure(self, text_content: str, filename: str):
+        """使用LLM分析文档结构"""
+        try:
+            analysis_prompt = f"""
+请分析以下文档内容并识别其结构：
+
+文件名：{filename}
+文档内容：
+{text_content[:3000]}...
+
+请以JSON格式返回文档结构，包含章节标题、层级和内容摘要。
+"""
+            
+            result_text = await self.llm_client.generate([
+                {"role": "system", "content": "你是文档结构分析专家。"},
+                {"role": "user", "content": analysis_prompt}
+            ])
+            
+            # 尝试解析JSON，如果失败则返回基础结构
+            try:
+                return json.loads(result_text)
+            except:
+                return [{
+                    "level": 1,
+                    "title": "文档内容",
+                    "content": text_content[:300] + "..." if len(text_content) > 300 else text_content,
+                    "subsections": []
+                }]
+        except Exception as e:
+            return [{
+                "level": 1,
+                "title": f"解析失败 - {filename}",
+                "content": f"结构分析失败: {str(e)}",
+                "subsections": []
+            }]

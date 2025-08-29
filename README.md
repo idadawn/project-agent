@@ -1,24 +1,28 @@
-# Project Agent – 投标文件生成系统（A→E Pipeline）
+# Project Agent – 智能投标文件生成系统（文档解析 → A-E Pipeline）
 > FastAPI + LangGraph + Next.js 的多智能体投标文件处理与生成系统  
-> **已切换为 A→E 流程**：A 结构抽取 → B 规格书提取 → C 方案提纲 → D 拼装草案 → E 合规校验
+> **完整 6 步流程**：文档解析 → A 结构抽取 → B 规格书提取 → C 方案提纲 → D 拼装草案 → E 合规校验
 
 ## ✨ 特性
-- 多智能体编排（LangGraph）：新增 A→E 五结点
+- 多智能体编排（LangGraph）：文档解析 + A→E 六结点
+- 文档解析：使用 microsoft/markitdown 将 PDF/DOCX 转为 Markdown
 - 强鲁棒结构抽取：不规整文档也能回退到 11 项标准骨架
-- 规格书精准抽取：自动切片"第四章 技术规格书/技术要求"→"第五章/投标文件格式"前
+- 规格书精准抽取：自动切片“第四章 技术规格书/技术要求”→“第五章/投标文件格式”前
 - 与评分对齐的方案提纲：技术方案 25 分 + 施工方法及主要技术措施 25 分
 - 一键拼装草案：骨架 + 方案提纲 + 规格书节选
 - 合规快检：工期/环保/安全/第三方检测/资料交付/验收等关键项缺失提示
 - 三面板界面：文件树（wiki/）+ Markdown 编辑器 + 聊天（Coordinator）
+- 智能体Pipeline可视化：实时显示执行进度和状态
 
-## 🧭 新流程（A→E）
-1. A · StructureExtractor → 生成 `wiki/投标文件_骨架.md`
-2. B · SpecExtractor → 生成 `wiki/技术规格书_提取.md`
-3. C · PlanOutliner → 生成 `wiki/方案_提纲.md`
-4. D · BidAssembler → 生成 `wiki/投标文件_草案.md`
-5. E · SanityChecker → 生成 `wiki/sanity_report.json`
+## 🧭 完整 6 步工作流（文档解析 → A-E Pipeline）
+0. **文档解析** · DocumentParserAgent → 生成 `uploads/原文件` + `wiki/招标文件.md`
+1. **A · 结构抽取** · StructureExtractor → 生成 `wiki/投标文件_骨架.md`
+2. **B · 规格书提取** · SpecExtractor → 生成 `wiki/技术规格书_提取.md`
+3. **C · 方案提纲生成** · PlanOutliner → 生成 `wiki/方案_提纲.md`
+4. **D · 投标草案拼装** · BidAssembler → 生成 `wiki/投标文件_草案.md`
+5. **E · 完整性校验** · SanityChecker → 生成 `wiki/合规性报告.json`
 
-> 兼容"每份都不一样"：**标题匹配 → 目录驱动 → 默认模板** 三层兜底。
+> 📝 **新增亮点**：自动识别Word/PDF文件上传，触发智能体Pipeline可视化界面，实时显示执行进度。  
+> 兼容“每份都不一样”：**标题匹配 → 目录驱动 → 默认模板** 三层兜底。
 
 ## 🚀 快速开始
 
@@ -77,16 +81,25 @@ Content-Type: application/json
 project-agent/
 ├── backend/
 │   ├── agents/
-│   │   ├── structure_extractor.py
-│   │   ├── spec_extractor.py
-│   │   ├── plan_outliner.py
-│   │   ├── bid_assembler.py
-│   │   └── sanity_checker.py
+│   │   ├── document_parser.py      # 文档解析智能体
+│   │   ├── structure_extractor.py  # A-结构抽取
+│   │   ├── spec_extractor.py       # B-规格书提取
+│   │   ├── plan_outliner.py        # C-方案提纲
+│   │   ├── bid_assembler.py        # D-草案拼装
+│   │   └── sanity_checker.py       # E-完整性校验
+│   ├── api/v1/endpoints/
+│   │   ├── pipeline.py             # Pipeline API端点
+│   │   └── proposals.py            # 投标文件生成API
 │   ├── prompts/plan_outliner.md
-│   ├── workflow/bid_graph.py
-│   └── api/v1/endpoints/proposals.py
-├── uploads/         # 输入
-└── wiki/            # 输出
+│   └── workflow/bid_graph.py
+├── frontend/
+│   ├── components/
+│   │   ├── PipelinePanel.tsx       # Pipeline可视化组件
+│   │   └── ChatPanel.tsx           # 聊天面板（集成Pipeline）
+│   └── hooks/
+│       └── usePipeline.ts          # Pipeline状态管理
+├── uploads/         # 输入（原始文件）
+└── wiki/            # 输出（生成文件）
 ```
 
 ## 🔧 技术架构
@@ -105,6 +118,11 @@ project-agent/
 - **框架**: Next.js 14 + React + TypeScript + Tailwind CSS
 - **三面板布局**: 文件树 + Markdown编辑器 + 聊天面板
 - **实时优化**: 支持在Markdown编辑器中实时文本优化
+- **智能体Pipeline可视化**: 
+  - 自动检测Word/PDF文件上传并触发Pipeline界面
+  - 6步工作流实时进度追踪和状态显示
+  - 支持单步执行和一键执行全流程
+  - 生成的文件自动显示在左侧文件树中
 
 ## 📦 使用指南
 
@@ -126,11 +144,22 @@ python dev.py
 cd frontend && npm run dev
 ```
 
-### 3. 使用 A→E 流程
-有两种方式触发 A→E 流程：
+### 3. 使用完整 6 步流程
+有两种方式触发完整流程：
 
-#### 方式 1：直接 API 调用
+#### 方式 1：前端界面（推荐）
+1. 访问 http://localhost:3000
+2. 点击📎按钮上传Word或PDF招标文件
+3. 系统自动检测文件类型并显示智能体Pipeline界面
+4. 点击“一键执行”或逐步执行每个步骤
+5. 实时查看执行进度和生成的文件
+
+#### 方式 2：直接 API 调用
 ```bash
+# 首先上传文件到uploads目录
+cp 你的招标文件.docx uploads/
+
+# 调用API触发完整流程
 curl -X POST http://localhost:8001/api/v1/proposals/build \
   -H "Content-Type: application/json" \
   -d '{
@@ -141,18 +170,23 @@ curl -X POST http://localhost:8001/api/v1/proposals/build \
   }'
 ```
 
-#### 方式 2：前端界面
-1. 访问 http://localhost:3000
-2. 在聊天面板输入："使用 A→E 流程生成投标文件"
-3. 或点击"生成投标文件"按钮
-
 ### 4. 查看结果
-生成完成后，在 `wiki/` 目录下查看：
-- `投标文件_骨架.md` - 投标文件结构框架
-- `技术规格书_提取.md` - 提取的技术要求
-- `方案_提纲.md` - 技术方案大纲
-- `投标文件_草案.md` - 最终拼装的投标文件
-- `sanity_report.json` - 合规性检查报告
+生成完成后，可在以下位置查看结果：
+
+**uploads/ 目录**（原始文件）：
+- 上传的原始招标文件（Word/PDF等）
+
+**wiki/ 目录**（生成文件）：
+- `招标文件.md` - 解析后的结构化文档（文档解析步骤）
+- `投标文件_骨架.md` - 投标文件结构框架（A步）
+- `技术规格书_提取.md` - 提取的技术要求（B步）
+- `方案_提纲.md` - 技术方案大纲（C步）
+- `投标文件_草案.md` - 最终拼装的投标文件（D步）
+- `合规性报告.json` - 合规性检查报告（E步）
+
+**前端界面**：
+- 左侧文件树会自动显示所有生成的文件
+- 点击文件名即可在中间的Markdown编辑器中预览和编辑
 
 ## 🧰 模型配置
 ```python
