@@ -1,6 +1,6 @@
 # backend/agents/spec_extractor.py
-from typing import Dict, Any, Tuple
-import re, os, pathlib, datetime
+from typing import Dict, Any
+import os, re, pathlib, datetime
 
 try:
     from .base import BaseAgent
@@ -17,32 +17,50 @@ class SpecExtractor(BaseAgent):
         super().__init__("spec_extractor")
 
     def get_system_prompt(self) -> str:
-        return "你是技术规格书抽取专家，从招标文件中精准定位并抽取第四章技术规格书内容。"
+        return "你是技术规格书提取专家，从招标文件中精确提取技术要求和规格书内容。"
 
-    START_PATS = [
-        r"^#{1,6}\s*第\s*[四4IV]\s*章.*?(技术规格书|技术要求)",
-    ]
-    END_PATS = [
-        r"^#{1,6}\s*第\s*[五5V]\s*章", r"^#{1,6}\s*投标文件格式"
-    ]
-
-    def _slice(self, text:str)->Tuple[int,int]:
-        s = None
-        for p in self.START_PATS:
-            s = re.search(p, text, re.M)
-            if s: break
-        if not s:
-            return (0,0)
-        e = None
-        for p in self.END_PATS:
-            e = re.search(p, text[s.end():], re.M)
-            if e: break
-        if e:
-            return (s.start(), s.end()+e.start())
-        return (s.start(), len(text))
+    def _slice(self, text: str):
+        """切片技术规格书：从"第四章 技术规格书/技术要求"至"第五章/投标文件格式"前"""
+        patterns = [
+            r"第四章[\s]*技术规格书",
+            r"第四章[\s]*技术要求",
+            r"四、[\s]*技术规格书",
+            r"四、[\s]*技术要求",
+            r"4[\s]*技术规格书",
+            r"4[\s]*技术要求"
+        ]
+        
+        start = None
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                start = match.start()
+                break
+        
+        if start is None:
+            return None, None
+        
+        # 找结束位置：第五章或投标文件格式
+        end_patterns = [
+            r"第五章",
+            r"五、",
+            r"5[\s]*",
+            r"投标文件格式",
+            r"招标文件格式"
+        ]
+        
+        end = None
+        for pattern in end_patterns:
+            match = re.search(pattern, text[start:], re.IGNORECASE)
+            if match:
+                end = start + match.start()
+                break
+        
+        return start, end
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        tender_path = state.get("tender_path") or "uploads/招标文件.md"
+        # ✅ 统一用传入的 tender_path，不要再拼 uploads/
+        tender_path = self._get_tender_path(state)
         wiki_dir = state.get("wiki_dir", "wiki")
         pathlib.Path(wiki_dir).mkdir(parents=True, exist_ok=True)
 
@@ -56,7 +74,7 @@ class SpecExtractor(BaseAgent):
         head = f"""---
 title: 技术规格书（提取）
 generated_at: {datetime.date.today().strftime("%Y-%m-%d")}
-note: 由 SpecExtractor 自动抽取（从“第四章 技术规格书/技术要求”至“第五章/投标文件格式”前）
+note: 由 SpecExtractor 自动抽取（从"第四章 技术规格书/技术要求"至"第五章/投标文件格式"前）
 ---
 
 """
@@ -66,3 +84,35 @@ note: 由 SpecExtractor 自动抽取（从“第四章 技术规格书/技术要
         state["spec_path"] = out
         state["spec_extracted"] = bool(s or e)
         return state
+    
+    def _get_tender_path(self, state: Dict[str, Any]) -> str:
+        """统一解析招标文件路径"""
+        from pathlib import Path
+        
+        # 1) 优先：传入的 tender_path
+        p = state.get("tender_path")
+        if p and Path(p).exists():
+            return str(Path(p).resolve())
+        
+        # 2) 次优：从 meta 中获取
+        meta = state.get("meta", {})
+        p = meta.get("tender_path")
+        if p and Path(p).exists():
+            return str(Path(p).resolve())
+        
+        # 3) 次优：兼容路径
+        p = meta.get("legacy_tender_path")
+        if p and Path(p).exists():
+            return str(Path(p).resolve())
+        
+        # 4) 占底：常见目录候选
+        for candidate in [
+            Path("uploads") / "招标文件.md",
+            Path("/root/project/git/project-agent/uploads") / "招标文件.md",
+            Path("wiki") / "招标文件.md",
+            Path("/root/project/git/project-agent/wiki") / "招标文件.md",
+        ]:
+            if candidate.exists():
+                return str(candidate.resolve())
+        
+        raise FileNotFoundError("未找到招标文件：tender_path/meta/legacy/candidates 均不存在")

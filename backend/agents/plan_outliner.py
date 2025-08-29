@@ -11,7 +11,7 @@ except Exception:
             return state
 
 try:
-    from ..app_core.llm_client import get_llm
+    from app_core.llm_client import get_llm
 except Exception:
     def get_llm(alias:str):
         class Dummy:

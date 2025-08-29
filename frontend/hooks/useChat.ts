@@ -282,6 +282,7 @@ export function useChat(sessionId: string | null, options?: ChatOptions) {
                   }
 
                   case 'agent_status': {
+                    console.log('Received agent_status:', parsed)  // 新增调试信息
                     setAgentStatus({ agent: parsed.agent, action: parsed.action })
                     break
                   }

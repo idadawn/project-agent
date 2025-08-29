@@ -1,9 +1,14 @@
 from typing import List, Union
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 
 
 class Settings(BaseSettings):
+    # Pydantic v2 settings config
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",  # 忽略 .env 中未在模型中声明的额外键
+    )
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = "your-secret-key-change-this"
     
@@ -30,14 +35,41 @@ class Settings(BaseSettings):
             if v.startswith("[") and v.endswith("]"):
                 # Handle JSON array format
                 import json
-                return json.loads(v)
+                origins = json.loads(v)
             else:
                 # Handle comma-separated string
-                return [i.strip() for i in v.split(",") if i.strip()]
+                origins = [i.strip() for i in v.split(",") if i.strip()]
         elif isinstance(v, list):
-            return v
+            origins = v
         else:
-            return ["http://localhost:3000", "http://localhost:8005"]
+            origins = ["http://localhost:3000", "http://localhost:8005"]
+
+        # 自动补全 localhost/127.0.0.1 变体，避免本地调试时 CORS 不匹配
+        try:
+            completed: List[str] = []
+            seen = set()
+            for origin in origins:
+                if not isinstance(origin, str):
+                    continue
+                o = origin.strip()
+                if not o:
+                    continue
+                if o in seen:
+                    continue
+                completed.append(o)
+                seen.add(o)
+                # 仅处理 http(s)://localhost:PORT 和 http(s)://127.0.0.1:PORT
+                for host_a, host_b in [("localhost", "127.0.0.1"), ("127.0.0.1", "localhost")]:
+                    prefix = f"http://{host_a}:"
+                    sprefix = f"https://{host_a}:"
+                    if o.startswith(prefix) or o.startswith(sprefix):
+                        swapped = o.replace(f"{host_a}", host_b, 1)
+                        if swapped not in seen:
+                            completed.append(swapped)
+                            seen.add(swapped)
+            return completed
+        except Exception:
+            return origins if isinstance(origins, list) else ["http://localhost:3000", "http://localhost:8005"]
     
     # Content directories
     WIKI_DIR: str = "wiki"
@@ -58,8 +90,9 @@ class Settings(BaseSettings):
     # Database Settings (optional)
     DATABASE_URL: str = "sqlite:///./sessions.db"
     
-    class Config:
-        env_file = ".env"
+    # 旧版 Config 保留注释说明：已由 model_config 取代
+    # class Config:
+    #     env_file = ".env"
 
 
 settings = Settings()

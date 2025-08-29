@@ -99,7 +99,8 @@ generated_at: {today}
 """
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        tender_path = state.get("tender_path") or "uploads/招标文件.md"
+        # ✅ 统一用传入的 tender_path，不要再拼 uploads/
+        tender_path = self._get_tender_path(state)
         wiki_dir = state.get("wiki_dir", "wiki")
         pathlib.Path(wiki_dir).mkdir(parents=True, exist_ok=True)
 
@@ -116,3 +117,35 @@ generated_at: {today}
         state["outline_path"] = out_path
         state["outline_sections"] = sections
         return state
+    
+    def _get_tender_path(self, state: Dict[str, Any]) -> str:
+        """统一解析招标文件路径"""
+        from pathlib import Path
+        
+        # 1) 优先：传入的 tender_path
+        p = state.get("tender_path")
+        if p and Path(p).exists():
+            return str(Path(p).resolve())
+        
+        # 2) 次优：从 meta 中获取
+        meta = state.get("meta", {})
+        p = meta.get("tender_path")
+        if p and Path(p).exists():
+            return str(Path(p).resolve())
+        
+        # 3) 次优：兼容路径
+        p = meta.get("legacy_tender_path")
+        if p and Path(p).exists():
+            return str(Path(p).resolve())
+        
+        # 4) 占底：常见目录候选
+        for candidate in [
+            Path("uploads") / "招标文件.md",
+            Path("/root/project/git/project-agent/uploads") / "招标文件.md",
+            Path("wiki") / "招标文件.md",
+            Path("/root/project/git/project-agent/wiki") / "招标文件.md",
+        ]:
+            if candidate.exists():
+                return str(candidate.resolve())
+        
+        raise FileNotFoundError("未找到招标文件：tender_path/meta/legacy/candidates 均不存在")

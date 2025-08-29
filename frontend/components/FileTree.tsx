@@ -150,7 +150,7 @@ export function FileTree({ files, selectedFile, onFileSelect, loading }: FileTre
         {/* 上传文件夹 */}
         {renderFolder('uploads', uploadFiles, '📁 上传文件')}
         {/* 解析文件夹 */}
-        {renderFolder('parsed', parsedFiles, '📚 方案文件')}
+        {renderFolder('parsed', parsedFiles, '📚 解析文件')}
       </div>
       
       {/* 文件夹说明 */}

@@ -2,11 +2,11 @@
 from typing import Dict, Any
 from langgraph.graph import StateGraph, END
 
-from backend.agents.structure_extractor import StructureExtractor
-from backend.agents.spec_extractor import SpecExtractor
-from backend.agents.plan_outliner import PlanOutliner
-from backend.agents.bid_assembler import BidAssembler
-from backend.agents.sanity_checker import SanityChecker
+from agents.structure_extractor import StructureExtractor
+from agents.spec_extractor import SpecExtractor
+from agents.plan_outliner import PlanOutliner
+from agents.bid_assembler import BidAssembler
+from agents.sanity_checker import SanityChecker
 
 def build_bid_graph(State=dict):
     graph = StateGraph(State)

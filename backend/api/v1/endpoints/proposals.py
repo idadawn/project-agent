@@ -1,6 +1,6 @@
 # backend/api/v1/endpoints/proposals.py
 from fastapi import APIRouter, Body
-from backend.workflow.bid_graph import run_build
+from workflow.bid_graph import run_build
 
 router = APIRouter(tags=["proposals"])
 
