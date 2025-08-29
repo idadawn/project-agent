@@ -61,11 +61,20 @@ coverage/
 *.temp
 
 # Session files
-sessions/*.json
-!sessions/test-session-123.json
+sessions/
+backend/sessions/
+!sessions/.gitkeep
+!backend/sessions/.gitkeep
 
 # Uploads
 uploads/
+!uploads/.gitkeep
+
+# Wiki files
+wiki/
+backend/wiki/
+!wiki/.gitkeep
+!backend/wiki/.gitkeep
 
 # Lock files
 package-lock.json
