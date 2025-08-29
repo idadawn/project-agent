@@ -4,6 +4,9 @@ import { useState, useRef, useEffect } from 'react'
 import { Send, Paperclip, X, File, Bot, ChevronDown, ChevronUp, Settings, CheckCircle, XCircle, Clock, Search, Edit, Puzzle, CheckSquare, FileText, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { OptimizationPanel } from './OptimizationPanel'
+import PipelinePanel from '@/components/PipelinePanel'
+import { PIPELINE_ORDER } from '@/lib/pipeline'
+import type { AgentEvent } from '@/hooks/usePipelineEvents'
 
 interface Message {
   id: string
@@ -46,6 +49,8 @@ export function ChatPanel({
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [showOptimization, setShowOptimization] = useState(false)
   const [showAgentDetails, setShowAgentDetails] = useState(true)
+  const [tab, setTab] = useState<'pipeline'|'chat'>('pipeline')
+  const [pipelineEvents, setPipelineEvents] = useState<AgentEvent[]>([])
   const [selectedModel, setSelectedModel] = useState('deepseek/deepseek-chat-v3.1')
   const [showModelOptions, setShowModelOptions] = useState(false)
   const [currentPipelineState, setCurrentPipelineState] = useState<{
@@ -154,6 +159,29 @@ export function ChatPanel({
       </div>
     )
   }
+  // 收集 pipeline 事件（由后端 agent_status 推断）
+  useEffect(() => {
+    // 从 messages 中提取 agent_status 风格的元数据（适配现有返回）
+    const events: AgentEvent[] = []
+    for (const m of messages) {
+      if (m.role === 'assistant' && m.metadata) {
+        const md: any = m.metadata
+        if (md.stage || md.action || md.current_agent) {
+          events.push({
+            ts: Date.now(),
+            sessionId: sessionId || '',
+            stage: md.stage,
+            agent: md.current_agent,
+            action: md.action,
+            status: (md.status as any) || (md.stage === 'bid_build_completed' ? 'succeeded' : undefined),
+            meta: md,
+          })
+        }
+      }
+    }
+    setPipelineEvents(events)
+  }, [messages, sessionId])
+
 
   // Effects
   useEffect(() => {
@@ -252,8 +280,20 @@ export function ChatPanel({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Messages */}
+      {/* Pipeline/Chat Tabs */}
+      <div className="px-4 pt-4 border-b border-border/50">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setTab('pipeline')} className={`px-3 py-1 rounded ${tab==='pipeline'?'bg-black text-white':'bg-gray-100'}`}>Pipeline</button>
+          <button onClick={() => setTab('chat')} className={`px-3 py-1 rounded ${tab==='chat'?'bg-black text-white':'bg-gray-100'}`}>Chat</button>
+        </div>
+      </div>
+
+      {/* Main Body */}
       <div className="flex-1 overflow-auto p-4 space-y-5">
+        {tab === 'pipeline' ? (
+          <PipelinePanel events={pipelineEvents} />
+        ) : (
+          <>
         {messages.length === 0 ? (
           <div className="text-center text-muted-foreground py-8">
             <Send className="h-8 w-8 mx-auto opacity-50 mb-4" />
@@ -346,6 +386,8 @@ export function ChatPanel({
           </div>
         )}
         <div ref={messagesEndRef} />
+          </>
+        )}
       </div>
 
       {/* Optimization Panel */}
