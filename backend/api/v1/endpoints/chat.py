@@ -13,6 +13,7 @@ from workflow.graph import ProposalWorkflow
 from workflow.state import WorkflowState
 from services.session_manager import SessionManager, get_session_manager
 import uuid
+from pathlib import Path
 
 router = APIRouter()
 
@@ -173,11 +174,14 @@ async def stream_chat_response(
                         file_type = "proposal"
                     else:
                         file_type = "wiki"
-                
-                session_files[file["name"]] = {
-                    "content": file["content"],
-                    "type": file_type
-                }
+                # 提供内容回退：优先使用传入的content；否则从path读取
+                content = file.get("content")
+                if content is None and file.get("path"):
+                    try:
+                        content = Path(file["path"]).read_text(encoding="utf-8")
+                    except Exception:
+                        content = ""
+                session_files[file["name"]] = {"content": content, "type": file_type}
             session_update["created_files"] = session_files
         
         # Store uploaded files in session for persistence
@@ -198,7 +202,9 @@ async def stream_chat_response(
         
         # Stream the final response
         files_created = result_state.get("files_to_create", [])
-        logger.info(f"Files created: {[f.get('name') for f in files_created]}")
+        logger.info(
+            f"Files created: {[ (Path(f.get('path')).name if f.get('path') else f.get('name')) for f in files_created ]}"
+        )
         
         # Extract agent information from the last assistant message metadata
         response_metadata = result_state.get("metadata", {})
@@ -209,15 +215,25 @@ async def stream_chat_response(
         if "current_agent" not in response_metadata:
             response_metadata["current_agent"] = result_state.get("current_agent", "coordinator")
         
+        # 统一构建要回传的文件（带内容，必要时从路径读取）
+        def _serialize_files(files: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+            serialized = []
+            for f in files:
+                content = f.get("content")
+                if content is None and f.get("path"):
+                    try:
+                        content = Path(f["path"]).read_text(encoding="utf-8")
+                    except Exception:
+                        content = ""
+                serialized.append({"name": f.get("name", "unnamed"), "content": content or ""})
+            return serialized
+
         response_data = {
             'type': 'message',
             'session_id': session_id,
             'message': response_content,
             'metadata': response_metadata,
-            'files_created': [
-                {"name": f["name"], "content": f["content"]} 
-                for f in files_created
-            ]
+            'files_created': _serialize_files(files_created)
         }
         
         logger.info(f"Sending response data with {len(files_created)} files")
@@ -301,10 +317,13 @@ async def send_message_sync(
             # Store files data in session
             session_files = {}
             for file in files_created:
-                session_files[file["name"]] = {
-                    "content": file["content"],
-                    "type": file.get("type", "other")
-                }
+                content = file.get("content")
+                if content is None and file.get("path"):
+                    try:
+                        content = Path(file["path"]).read_text(encoding="utf-8")
+                    except Exception:
+                        content = ""
+                session_files[file["name"]] = {"content": content, "type": file.get("type", "other")}
             session_update["created_files"] = session_files
         
         # Store uploaded files in session for persistence
@@ -342,14 +361,23 @@ async def send_message_sync(
         if "current_agent" not in response_metadata:
             response_metadata["current_agent"] = result_state.get("current_agent", "coordinator")
         
+        def _serialize_files(files: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+            serialized = []
+            for f in files:
+                content = f.get("content")
+                if content is None and f.get("path"):
+                    try:
+                        content = Path(f["path"]).read_text(encoding="utf-8")
+                    except Exception:
+                        content = ""
+                serialized.append({"name": f.get("name", "unnamed"), "content": content or ""})
+            return serialized
+
         return ChatResponse(
             session_id=session_id,
             message=response_content,
             metadata=response_metadata,
-            files_created=[
-                {"name": f["name"], "content": f["content"]} 
-                for f in result_state.get("files_to_create", [])
-            ],
+            files_created=_serialize_files(result_state.get("files_to_create", [])),
             conversation_history=conversation
         )
         

@@ -46,7 +46,8 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
             if current_stage == "initial":
                 return await self._handle_initial_request(context)
             elif current_stage == "parsing_requested":
-                # 处理文档解析请求
+                # 处理文档解析请求，明确清除此状态并推进
+                context.project_state["current_stage"] = "document_parsing"  # 立即推进状态
                 return await self._coordinate_bid_build(context)
             else:
                 return await self._handle_general_coordination(context)
@@ -92,16 +93,25 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
     async def _handle_general_coordination(self, context: AgentContext) -> AgentResponse:
         """处理一般性协调请求"""
         user_text = (context.user_input or "").strip()
+        current_stage = context.project_state.get("current_stage", "initial")
+        
         # 触发词：继续执行/开始/执行/生成模板 → 直接推进到A-E工作流
         trigger_keywords = ["继续", "继续执行", "开始", "执行", "生成模板"]
         if any(k in user_text for k in trigger_keywords):
             return await self._coordinate_bid_build(context)
 
+        # === 修复6: 堵住协调器的"误改阶段" ===
+        # 只有当当前阶段不是其它专用阶段时，才设置为 general_coordination
+        if current_stage in (None, "", "initial", "general_coordination"):
+            md_stage = "general_coordination"
+        else:
+            md_stage = current_stage  # 不覆盖专用阶段
+
         return AgentResponse(
             content="🤝 **Coordinator 智能体**: 我来协助您处理招标文件相关事务。\n\n请上传招标文件或告诉我您的具体需求，我会协调专业团队为您处理。",
             metadata={
                 "current_agent": "coordinator",
-                "stage": "general_coordination"
+                "stage": md_stage  # 使用保护后的阶段
             },
             next_actions=["await_user_input"]
         )
@@ -143,7 +153,7 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
         
         # 如果没有上传文件，直接使用默认模板执行A-E工作流
         # 优先使用文档解析产出的标准路径；若不存在，则依然允许A–E以兜底模板运行
-        from backend.app_core.config import settings
+        from app_core.config import settings
         tender_path = (
             (context.project_state or {}).get("tender_path")
             or settings.TENDER_DEFAULT_PATH
@@ -182,7 +192,6 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
                     "current_agent": "coordinator",
                     "stage": "bid_build_completed",
                     "action": "bid_build_completed",
-                    "files_to_create": [],
                 },
                 next_actions=[],
             )
