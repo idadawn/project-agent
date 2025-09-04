@@ -77,6 +77,14 @@ def strip_first_heading(block: str) -> str:
     return "\n".join(lines)
 
 
+def remove_all_chapter_headings(block: str) -> str:
+    """移除块内所有形如“# 第X章 ...”的 Markdown 标题行，避免残留目录/分章名。"""
+    text = _norm(block)
+    # 仅删除明确的章级标题（第X章），不影响 ##/### 内的小节标题
+    pat = re.compile(r"(?m)^\s*#{1,6}\s*第\s*(?:[一二三四五六七八九十百千\d]+)\s*章.*$\n?")
+    return pat.sub("", text).lstrip("\n")
+
+
 def outline(block: str, min_level: int = 2, max_level: int = 6) -> List[str]:
     """
     生成目录树，返回标题行（去掉#的文本），仅统计 ## 到 ######。
@@ -99,6 +107,8 @@ def extract_bid_format_section(md: str, user_hint: Optional[str] = None, drop_he
     section = _norm(md)[start:end]
     if drop_heading:
         section = strip_first_heading(section)
+    # 进一步清理所有可能残留的“第X章 ...”行
+    section = remove_all_chapter_headings(section)
     toc = outline(section, 2, 6)   # 统计二级及以下标题
     return section, toc
 
