@@ -1,6 +1,7 @@
 # backend/agents/structure_extractor.py
 from typing import Dict, Any, List, Tuple
 import re, os, pathlib, datetime
+from utils.extract_bid_section import extract_bid_format_section
 
 try:
     from .base import BaseAgent
@@ -106,11 +107,25 @@ generated_at: {today}
 
         with open(tender_path, "r", encoding="utf-8") as f:
             text = f.read()
+        
+        # 优先使用新的章节提取逻辑（支持“最后一章/投标文件格式/模板/范本/样本/投标格式”与 user_hint）
+        user_hint = state.get("user_hint") or state.get("meta", {}).get("user_hint")
+        section, toc = extract_bid_format_section(text, user_hint=user_hint, drop_heading=True)
+
+        out_path = os.path.join(wiki_dir, "投标文件_骨架.md")
+        if section:
+            # 命中目标章节：直接写入提取内容（已去章标题）
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write(section)
+            state["outline_path"] = out_path
+            state["outline_sections"] = toc or []
+            return state
+
+        # 未命中则回退旧逻辑：从“第五章 投标文件格式”附近尝试抽取条目，失败再用内置模板
         s, e = self._find_bid_format_block(text)
         sections = self._extract_sections(text[s:e]) if (s or e) else CANONICAL_SECTIONS
         content = self._render_skeleton(sections)
 
-        out_path = os.path.join(wiki_dir, "投标文件_骨架.md")
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(content)
 
