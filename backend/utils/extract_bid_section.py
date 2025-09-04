@@ -26,6 +26,22 @@ CHAPTER_SYNS_DEFAULT = [
 def _norm(md: str) -> str:
     return md.replace("\r\n", "\n").replace("\r", "\n")
 
+def _normalize(s: str) -> str:
+    """宽松规范化：统一全/半角标点与空白，便于匹配。"""
+    return (
+        s.replace("：", ":")
+         .replace("（", "(")
+         .replace(")", ")")
+         .replace("．", ".")
+         .replace("、", ".")
+         .replace("\ufeff", "")
+         .replace("\u200b", "")
+    ).strip()
+
+def _strip_num_prefix(s: str) -> str:
+    """移除条目前缀序号，如“一、/（一）/1.” 等。"""
+    return re.sub(r"^\s*[（(]?[一二三四五六七八九十\d]+[)）]?[\.、:：]?\s*", "", s)
+
 
 def find_chapter_span(md: str, user_hint: Optional[str] = None) -> Optional[Tuple[int, int]]:
     """
@@ -85,6 +101,88 @@ def remove_all_chapter_headings(block: str) -> str:
     return pat.sub("", text).lstrip("\n")
 
 
+def build_toc_item_list(md: str) -> List[str]:
+    """从正文内的“目 录”区域提取条目列表（不含“目 录”本身）。"""
+    lines = _norm(md).split("\n")
+    # 寻找“目 录/目录”标题行（忽略空格差异）
+    start = None
+    for i, ln in enumerate(lines):
+        key = _normalize(ln).replace(" ", "")
+        if key in ("目录", "目录", "目录", "目录"):  # 兼容“目 录”与“目录”
+            start = i
+            break
+    if start is None:
+        return []
+
+    items: List[str] = []
+    item_pat = re.compile(r"^[(（]?[一二三四五六七八九十\d]+[)）]?[、.．:：]\s*.+")
+    for j in range(start + 1, len(lines)):
+        t = lines[j].strip()
+        if not t:
+            if items:
+                break
+            else:
+                continue
+        if item_pat.match(t):
+            items.append(t)
+        else:
+            if items:
+                break
+    return items
+
+
+def ensure_headings_for_toc(md: str, toc_items: List[str]) -> str:
+    """
+    为每个目录条目在正文中自动补充一个二级标题（## ...）。
+    - 若能在正文定位到该条目关键词，则在其所在段落前插入标题
+    - 若定位失败，则将标题插入到“目 录”之后的第一处合适位置（最小改造）
+    """
+    body = _norm(md)
+
+    # 目录锚点（“目 录/目录”）位置，用于回退插入
+    def _find_catalog_insert_pos(text: str) -> int:
+        for key in ("目 录", "目录", "目录", "目录"):
+            idx = text.find(key)
+            if idx != -1:
+                # 放在该行之后一行
+                nl = text.find("\n", idx)
+                return len(text) if nl == -1 else nl + 1
+        return 0
+
+    for item in toc_items:
+        core = _strip_num_prefix(_normalize(item))
+        # 已存在对应二级标题？
+        pat_heading = re.compile(rf"(?m)^##\s*.*{re.escape(core)}.*$")
+        if pat_heading.search(body):
+            continue
+
+        # 选择性锚点集合
+        anchors = [
+            core,
+            core.replace("（", "(").replace("）", ")"),
+            core.replace(" ", ""),
+        ]
+        pos = -1
+        for a in anchors:
+            m = re.search(re.escape(a), body)
+            if m:
+                pos = m.start()
+                break
+
+        heading = f"\n## {item}\n"
+        if pos == -1:
+            # 回退：插在目录之后第一行
+            insert_at = _find_catalog_insert_pos(body)
+            body = body[:insert_at] + heading + body[insert_at:]
+        else:
+            # 在该锚点前，回溯至段落起始（空行后）
+            start_par = body.rfind("\n\n", 0, pos)
+            insert_at = 0 if start_par == -1 else start_par + 2
+            body = body[:insert_at] + heading + body[insert_at:]
+
+    return body
+
+
 def outline(block: str, min_level: int = 2, max_level: int = 6) -> List[str]:
     """
     生成目录树，返回标题行（去掉#的文本），仅统计 ## 到 ######。
@@ -109,6 +207,10 @@ def extract_bid_format_section(md: str, user_hint: Optional[str] = None, drop_he
         section = strip_first_heading(section)
     # 进一步清理所有可能残留的“第X章 ...”行
     section = remove_all_chapter_headings(section)
+    # 基于“目 录”条目自动补二级标题，保证目录与正文可对齐
+    toc_items = build_toc_item_list(section)
+    if toc_items:
+        section = ensure_headings_for_toc(section, toc_items)
     toc = outline(section, 2, 6)   # 统计二级及以下标题
     return section, toc
 
