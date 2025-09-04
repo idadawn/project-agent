@@ -1,6 +1,7 @@
 # backend/agents/spec_extractor.py
 from typing import Dict, Any
 import os, re, pathlib, datetime
+from utils.extract_bid_section import extract_tech_spec_section
 
 try:
     from .base import BaseAgent
@@ -14,48 +15,62 @@ class SpecExtractor(BaseAgent):
     name = "spec_extractor"
 
     def __init__(self):
-        super().__init__("spec_extractor")
+        try:
+            super().__init__(self.name)
+        except TypeError:
+            # Fallback for when base class doesn't expect parameters
+            pass
 
     def get_system_prompt(self) -> str:
         return "你是技术规格书提取专家，从招标文件中精确提取技术要求和规格书内容。"
 
     def _slice(self, text: str):
-        """切片技术规格书：从"第四章 技术规格书/技术要求"至"第五章/投标文件格式"前"""
+        """优先使用通用状态机；失败再用旧模式回退切片。"""
+        section = extract_tech_spec_section(text, include_heading=True)
+        if section:
+            # 返回切片位置以兼容后续逻辑（仅内部使用，外部直接写入 section）
+            start = text.find(section.split("\n", 1)[0])
+            end = start + len(section) if start >= 0 else None
+            return start, end
+        # 旧回退：原有正则法
         patterns = [
             r"第四章[\s]*技术规格书",
             r"第四章[\s]*技术要求",
+            r"第四章[\s]*技术规范",
+            r"第四章[\s]*技术标准",
             r"四、[\s]*技术规格书",
             r"四、[\s]*技术要求",
             r"4[\s]*技术规格书",
-            r"4[\s]*技术要求"
+            r"4[\s]*技术要求",
+            r"第4章[\s]*技术规格书",
+            r"第4章[\s]*技术要求"
         ]
-        
         start = None
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 start = match.start()
                 break
-        
         if start is None:
             return None, None
-        
-        # 找结束位置：第五章或投标文件格式
         end_patterns = [
             r"第五章",
+            r"第五章[\s]*投标文件格式",
+            r"第五章[\s]*招标文件格式",
             r"五、",
             r"5[\s]*",
             r"投标文件格式",
-            r"招标文件格式"
+            r"招标文件格式",
+            r"第5章",
+            r"第六章",
+            r"第6章"
         ]
-        
         end = None
         for pattern in end_patterns:
             match = re.search(pattern, text[start:], re.IGNORECASE)
             if match:
                 end = start + match.start()
                 break
-        
         return start, end
 
     def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -67,10 +82,21 @@ class SpecExtractor(BaseAgent):
         with open(tender_path, "r", encoding="utf-8") as f:
             text = f.read()
         s,e = self._slice(text)
-        payload = text[s:e].strip() if (s or e) else (
-            "# 第四章 技术规格书（未在文中定位，使用提纲占位）\n\n"
-            "- 交钥匙范围\n- 技术参数与标准\n- 资料交付\n- 质量与验收\n- 安全与环保\n"
-        )
+        extracted = False
+        if s is not None and e is not None and s >= 0:
+            payload = text[s:e].strip()
+            extracted = True
+        else:
+            # 再尝试直接拿状态机文本（避免切片定位失败，但已抽到文本的情况）
+            direct = extract_tech_spec_section(text, include_heading=True)
+            if direct:
+                payload = direct.strip()
+                extracted = True
+            else:
+                payload = (
+                    "# 第四章 技术规格书（未在文中定位，使用提纲占位）\n\n"
+                    "- 交钥匙范围\n- 技术参数与标准\n- 资料交付\n- 质量与验收\n- 安全与环保\n"
+                )
         head = f"""---
 title: 技术规格书（提取）
 generated_at: {datetime.date.today().strftime("%Y-%m-%d")}
@@ -82,7 +108,7 @@ note: 由 SpecExtractor 自动抽取（从"第四章 技术规格书/技术要�
         with open(out, "w", encoding="utf-8") as f:
             f.write(head+payload+"\n")
         state["spec_path"] = out
-        state["spec_extracted"] = bool(s or e)
+        state["spec_extracted"] = bool(extracted)
         return state
     
     def _get_tender_path(self, state: Dict[str, Any]) -> str:

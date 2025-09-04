@@ -26,22 +26,6 @@ CHAPTER_SYNS_DEFAULT = [
 def _norm(md: str) -> str:
     return md.replace("\r\n", "\n").replace("\r", "\n")
 
-def _normalize(s: str) -> str:
-    """宽松规范化：统一全/半角标点与空白，便于匹配。"""
-    return (
-        s.replace("：", ":")
-         .replace("（", "(")
-         .replace(")", ")")
-         .replace("．", ".")
-         .replace("、", ".")
-         .replace("\ufeff", "")
-         .replace("\u200b", "")
-    ).strip()
-
-def _strip_num_prefix(s: str) -> str:
-    """移除条目前缀序号，如“一、/（一）/1.” 等。"""
-    return re.sub(r"^\s*[（(]?[一二三四五六七八九十\d]+[)）]?[\.、:：]?\s*", "", s)
-
 
 def find_chapter_span(md: str, user_hint: Optional[str] = None) -> Optional[Tuple[int, int]]:
     """
@@ -101,88 +85,6 @@ def remove_all_chapter_headings(block: str) -> str:
     return pat.sub("", text).lstrip("\n")
 
 
-def build_toc_item_list(md: str) -> List[str]:
-    """从正文内的“目 录”区域提取条目列表（不含“目 录”本身）。"""
-    lines = _norm(md).split("\n")
-    # 寻找“目 录/目录”标题行（忽略空格差异）
-    start = None
-    for i, ln in enumerate(lines):
-        key = _normalize(ln).replace(" ", "")
-        if key in ("目录", "目录", "目录", "目录"):  # 兼容“目 录”与“目录”
-            start = i
-            break
-    if start is None:
-        return []
-
-    items: List[str] = []
-    item_pat = re.compile(r"^[(（]?[一二三四五六七八九十\d]+[)）]?[、.．:：]\s*.+")
-    for j in range(start + 1, len(lines)):
-        t = lines[j].strip()
-        if not t:
-            if items:
-                break
-            else:
-                continue
-        if item_pat.match(t):
-            items.append(t)
-        else:
-            if items:
-                break
-    return items
-
-
-def ensure_headings_for_toc(md: str, toc_items: List[str]) -> str:
-    """
-    为每个目录条目在正文中自动补充一个二级标题（## ...）。
-    - 若能在正文定位到该条目关键词，则在其所在段落前插入标题
-    - 若定位失败，则将标题插入到“目 录”之后的第一处合适位置（最小改造）
-    """
-    body = _norm(md)
-
-    # 目录锚点（“目 录/目录”）位置，用于回退插入
-    def _find_catalog_insert_pos(text: str) -> int:
-        for key in ("目 录", "目录", "目录", "目录"):
-            idx = text.find(key)
-            if idx != -1:
-                # 放在该行之后一行
-                nl = text.find("\n", idx)
-                return len(text) if nl == -1 else nl + 1
-        return 0
-
-    for item in toc_items:
-        core = _strip_num_prefix(_normalize(item))
-        # 已存在对应二级标题？
-        pat_heading = re.compile(rf"(?m)^##\s*.*{re.escape(core)}.*$")
-        if pat_heading.search(body):
-            continue
-
-        # 选择性锚点集合
-        anchors = [
-            core,
-            core.replace("（", "(").replace("）", ")"),
-            core.replace(" ", ""),
-        ]
-        pos = -1
-        for a in anchors:
-            m = re.search(re.escape(a), body)
-            if m:
-                pos = m.start()
-                break
-
-        heading = f"\n## {item}\n"
-        if pos == -1:
-            # 回退：插在目录之后第一行
-            insert_at = _find_catalog_insert_pos(body)
-            body = body[:insert_at] + heading + body[insert_at:]
-        else:
-            # 在该锚点前，回溯至段落起始（空行后）
-            start_par = body.rfind("\n\n", 0, pos)
-            insert_at = 0 if start_par == -1 else start_par + 2
-            body = body[:insert_at] + heading + body[insert_at:]
-
-    return body
-
-
 def outline(block: str, min_level: int = 2, max_level: int = 6) -> List[str]:
     """
     生成目录树，返回标题行（去掉#的文本），仅统计 ## 到 ######。
@@ -207,11 +109,166 @@ def extract_bid_format_section(md: str, user_hint: Optional[str] = None, drop_he
         section = strip_first_heading(section)
     # 进一步清理所有可能残留的“第X章 ...”行
     section = remove_all_chapter_headings(section)
-    # 基于“目 录”条目自动补二级标题，保证目录与正文可对齐
-    toc_items = build_toc_item_list(section)
-    if toc_items:
-        section = ensure_headings_for_toc(section, toc_items)
     toc = outline(section, 2, 6)   # 统计二级及以下标题
     return section, toc
 
+
+# =========================
+# 通用：章节归一化 + 状态机（技术规格书专用）
+# =========================
+
+# 中文数字映射（简化覆盖：个、十、百 + 〇）
+CN_NUM_MAP = {
+    "零": 0, "〇": 0,
+    "一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+    "六": 6, "七": 7, "八": 8, "九": 9,
+    "十": 10, "百": 100,
+}
+
+
+def cn2int(s: str) -> int:
+    s = (s or "").strip()
+    if not s:
+        return 0
+    # 阿拉伯数字
+    if re.fullmatch(r"\d+", s):
+        try:
+            return int(s)
+        except Exception:
+            return 0
+    # 百位（简单处理，不处理复杂千位）
+    total = 0
+    if "百" in s:
+        parts = s.split("百")
+        left = CN_NUM_MAP.get(parts[0], 1)
+        total += left * 100
+        s = parts[1] if len(parts) > 1 else ""
+        if not s:
+            return total
+    # 十位
+    if "十" in s:
+        parts = s.split("十")
+        left = CN_NUM_MAP.get(parts[0], 1)
+        total += left * 10
+        s = parts[1] if len(parts) > 1 else ""
+        if s:
+            total += CN_NUM_MAP.get(s, 0)
+        return total
+    # 个位
+    return CN_NUM_MAP.get(s, 0)
+
+
+# 标题匹配（强/弱/加粗兜底）
+RE_STRONG = re.compile(
+    r"^\s*#{0,6}\s*\*{0,2}第?\s*([一二三四五六七八九十百零〇0-9]+)\s*章[：:\.．、\s-]*([^\n#\r]*)\*{0,2}\s*$"
+)
+RE_WEAK = re.compile(
+    r"^\s*#{0,6}\s*\*{0,2}([一二三四五六七八九十百零〇0-9]+)\s*章\s*([^\n#\r]*)\*{0,2}\s*$"
+)
+RE_BOLD = re.compile(r"^\s*\*{2}(.{0,50}章.{0,50})\*{2}\s*$")
+
+TECH_KEYWORDS = (
+    "技术规格书",
+    "技术规范",
+    "技术标准及规格",
+    "技术标准",
+    "技术条件",
+)
+
+
+def _is_toc_line(line: str) -> bool:
+    # 常见目录/锚点：Word 导出锚点、Markdown 链接目录
+    s = (line or "").strip()
+    if not s:
+        return False
+    if "#_Toc" in s:
+        return True
+    is_md_link = s.startswith("**[") and "](" in s
+    is_anchor_link = s.startswith("[") and "](#" in s
+    if is_md_link or is_anchor_link:
+        return True
+    # 明显“目录”行，且带链接/页码点线时，更像 TOC
+    if ("目录" in s) and (".." in s or ". ." in s or "](" in s):
+        return True
+    return False
+
+
+def _detect_heading(line: str) -> Tuple[Optional[int], Optional[str]]:
+    for pat in (RE_STRONG, RE_WEAK):
+        m = pat.match(line)
+        if m:
+            num_raw = m.group(1)
+            title = (m.group(2) or "").strip()
+            # Clean up markdown formatting from title
+            title = title.rstrip('*').strip()
+            try:
+                idx = cn2int(num_raw)
+            except Exception:
+                idx = None
+            return idx, title
+    mb = RE_BOLD.match(line)
+    if mb:
+        text = mb.group(1)
+        m2 = re.search(r"第?\s*([一二三四五六七八九十百零〇0-9]+)\s*章", text)
+        if m2:
+            idx = cn2int(m2.group(1))
+            title = text.split("章", 1)[-1].strip(" ：:．。.、-")
+            return idx, title
+    return None, None
+
+
+def extract_tech_spec_section(md_text: str, include_heading: bool = True) -> Optional[str]:
+    """
+    从"第四章 技术规格书/技术规范/技术标准及规格/技术标准/技术条件"开始，
+    抓取至"第五章"或"投标文件格式"章出现的上一行结束。兼容不同标题写法、中文/阿拉伯数字、目录过滤。
+    返回包含起始章标题的文本（可通过 include_heading 控制）。未命中返回 None。
+    """
+    text = _norm(md_text)
+    lines = text.split("\n")
+
+    # 跳过前部目录区域：以首次出现"第一章/第1章/1 章"等非 TOC 行作为正文起点
+    body_start = 0
+    for i, ln in enumerate(lines[:200]):
+        idx, _ = _detect_heading(ln)
+        if idx == 1 and not _is_toc_line(ln):
+            body_start = i
+            break
+
+    state = "OUTSIDE"
+    buf: List[str] = []
+    captured = False
+    for ln in lines[body_start:]:
+        idx, title = _detect_heading(ln)
+        if idx is not None:
+            if state == "OUTSIDE":
+                if idx == 4 and (not title or any(k in title for k in TECH_KEYWORDS)):
+                    state = "IN_TECH"
+                    captured = True
+                    if include_heading:
+                        buf.append(ln)
+                    continue
+            elif state == "IN_TECH":
+                # 遇到真正的下一章（第五章投标文件格式）时停止
+                # 技术规格书内部的所有章节都应该继续
+                should_stop = False
+                
+                # 检查是否是明确的下一章格式（第五章包含投标文件格式关键词）
+                if ("第五章" in ln or "第5章" in ln) and title and any(k in title for k in ["投标文件格式", "投标格式", "投标模板"]):
+                    should_stop = True
+                # 或者遇到任何章节包含投标文件格式关键词（无论章节号）
+                elif title and any(k in title for k in ["投标文件格式", "投标格式", "投标模板"]):
+                    should_stop = True
+                
+                if should_stop:
+                    break
+                # 技规书内部的所有章节标题，继续纳入
+                buf.append(ln)
+                continue
+        else:
+            if state == "IN_TECH":
+                buf.append(ln)
+
+    if not captured:
+        return None
+    return "\n".join(buf).strip("\n")
 
