@@ -125,63 +125,6 @@ class PlanOutliner(BaseAgent):
 
         llm = get_llm("plan_outliner")
         outline_content = llm.complete(prompt)
->>>>>>> c9213e8 (修改部分流程)
-        # 获取用户输入的技术要求
-        user_input = state.get("user_input", "")
-        
-        # 生成技术方案内容（不再是提纲）
-        tmpl = ""
-        if os.path.exists(PROMPT_FILE):
-            with open(PROMPT_FILE, "r", encoding="utf-8") as f:
-                tmpl = f.read()
-        else:
-            tmpl = (
-                "你是投标方案总工。目标：基于技术规格书、招标文件要求和用户输入，编写详细的技术方案内容。"
-                "要求：详细的技术描述、实施方案、质量控制措施、安全措施等具体内容。"
-                "\n\n【项目名称】\n{PROJECT_NAME}\n\n"
-                "【用户要求】\n{USER_INPUT}\n\n"
-                "【技术规格书】\n{SPEC}\n\n"
-                "【格式章节】\n{FORMAT_SECTIONS}\n"
-            )
-
-        prompt = tmpl.format(
-            PROJECT_NAME = meta.get("project_name", "{{PROJECT_NAME}}"),
-            USER_INPUT = user_input,
-            SPEC = spec_text[:12000],
-            FORMAT_SECTIONS = "\n".join(f"- {s}" for s in sections) if sections else "",
-        )
-
-        llm = get_llm("plan_outliner")
-        outline_content = llm.complete(prompt)
-=======
-        # 获取用户输入的技术要求
-        user_input = state.get("user_input", "")
-        
-        # 生成技术方案内容（不再是提纲）
-        tmpl = ""
-        if os.path.exists(PROMPT_FILE):
-            with open(PROMPT_FILE, "r", encoding="utf-8") as f:
-                tmpl = f.read()
-        else:
-            tmpl = (
-                "你是投标方案总工。目标：基于技术规格书、招标文件要求和用户输入，编写详细的技术方案内容。"
-                "要求：详细的技术描述、实施方案、质量控制措施、安全措施等具体内容。"
-                "\n\n【项目名称】\n{PROJECT_NAME}\n\n"
-                "【用户要求】\n{USER_INPUT}\n\n"
-                "【技术规格书】\n{SPEC}\n\n"
-                "【格式章节】\n{FORMAT_SECTIONS}\n"
-            )
-
-        prompt = tmpl.format(
-            PROJECT_NAME = meta.get("project_name", "{{PROJECT_NAME}}"),
-            USER_INPUT = user_input,
-            SPEC = spec_text[:12000],
-            FORMAT_SECTIONS = "\n".join(f"- {s}" for s in sections) if sections else "",
-        )
-
-        llm = get_llm("plan_outliner")
-        outline_content = llm.complete(prompt)
->>>>>>> c9213e8 (修改部分流程)
 
         head = f"""---
 title: 技术方案

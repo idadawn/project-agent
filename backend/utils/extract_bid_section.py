@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-从整份 Markdown 中定位“最后一章”或匹配“投标文件格式”（含同义词）的章标题（必须是 # 开头），
+从整份 Markdown 中定位"最后一章"或匹配"投标文件格式"（含同义词）的章标题（必须是 # 开头），
 截取该章至文末（或下一章标题前），并在去掉章标题行后，生成该章内的目录树（##/### 等小节）。
 
 关键规则：
 - 只认章标题：必须是 ^#{1,6}\s*第X章 开头；忽略目录链接与正文引用。
-- 忽略章号：只要标题文本出现“投标文件格式/模板/范本/样本/投标格式”即可。
-- “最后一章”优先：若 user_hint 含“最后/last”，或未命中关键词，则取文中最后一个章标题。
+- 忽略章号：只要标题文本出现"投标文件格式/模板/范本/样本/投标格式"即可。
+- "最后一章"优先：若 user_hint 含"最后/last"，或未命中关键词，则取文中最后一个章标题。
 - 兼容全/半角与数字：支持 ：/: 以及 第五章/第5章。
 """
 
@@ -16,7 +16,7 @@ import re
 
 CHAPTER_SYNS_DEFAULT = [
     "投标文件格式",
-    "投标文件模板",
+    "投标文件模板", 
     "投标格式",
     "投标文件范本",
     "投标文件样本",
@@ -46,7 +46,7 @@ def find_chapter_span(md: str, user_hint: Optional[str] = None) -> Optional[Tupl
     strict_matches = list(pat_strict.finditer(text))
     m = strict_matches[-1] if strict_matches else None
 
-    # 2) “最后/last” 或未命中关键词 → 取最后一个章标题
+    # 2) "最后/last" 或未命中关键词 → 取最后一个章标题
     if (user_hint and ("最后" in user_hint or "last" in user_hint.lower())) or not m:
         pat_last = re.compile(r"(?m)^\s*#{1,6}\s*第\s*(?:[一二三四五六七八九十百千\d]+)\s*章.*$")
         last = None
@@ -78,7 +78,7 @@ def strip_first_heading(block: str) -> str:
 
 
 def remove_all_chapter_headings(block: str) -> str:
-    """移除块内所有形如“# 第X章 ...”的 Markdown 标题行，避免残留目录/分章名。"""
+    """移除块内所有形如"# 第X章 ..."的 Markdown 标题行，避免残留目录/分章名。"""
     text = _norm(block)
     # 仅删除明确的章级标题（第X章），不影响 ##/### 内的小节标题
     pat = re.compile(r"(?m)^\s*#{1,6}\s*第\s*(?:[一二三四五六七八九十百千\d]+)\s*章.*$\n?")
@@ -185,18 +185,9 @@ def _is_toc_line(line: str) -> bool:
         return True
     is_md_link = s.startswith("**[") and "](" in s
     is_anchor_link = s.startswith("[") and "](#" in s
-    # 明显"目录"行，且带链接/页码点线时，更像 TOC
->>>>>>> c9213e8 (修改部分流程)
-    if ("目录" in s) and ("." in s or ". ." in s or "](" in s):
-        return True
     if is_md_link or is_anchor_link:
         return True
     # 明显"目录"行，且带链接/页码点线时，更像 TOC
-    if ("目录" in s) and ("." in s or ". ." in s or "](" in s):
-        return True
-=======
-    # 明显"目录"行，且带链接/页码点线时，更像 TOC
->>>>>>> c9213e8 (修改部分流程)
     if ("目录" in s) and (".." in s or ". ." in s or "](" in s):
         return True
     return False
@@ -277,11 +268,6 @@ def extract_tech_spec_section(md_text: str, include_heading: bool = True) -> Opt
             if state == "IN_TECH":
                 buf.append(ln)
 
-
->>>>>>> c9213e8 (修改部分流程)
     if not captured:
         return None
     return "\n".join(buf).strip("\n")
-=======
-
->>>>>>> c9213e8 (修改部分流程)
