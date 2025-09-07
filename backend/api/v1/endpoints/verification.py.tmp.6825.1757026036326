@@ -1,0 +1,165 @@
+"""
+Verification API endpoints for human intervention in bid generation workflow
+"""
+from typing import Dict, Any, List, Optional
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+import os
+import json
+from datetime import datetime
+
+router = APIRouter()
+
+class VerificationRequest(BaseModel):
+    session_id: str
+    status: str  # "confirmed" or "rejected"
+    selected_sections: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+class VerificationResponse(BaseModel):
+    success: bool
+    message: str
+    verification_file: Optional[str] = None
+    status: Optional[str] = None
+
+class VerificationStatusResponse(BaseModel):
+    session_id: str
+    status: str
+    generated_files: Dict[str, str]
+    available_sections: List[str]
+    user_selected_sections: List[str]
+    user_notes: str
+    generated_at: str
+    requires_action: bool
+
+@router.get("/verification/status/{session_id}", response_model=VerificationStatusResponse)
+async def get_verification_status(session_id: str):
+    """
+    获取验证状态
+    """
+    try:
+        # 查找验证文件
+        verification_file = None
+        wiki_dirs = ["wiki", "/root/project/git/project-agent/wiki"]
+        
+        for wiki_dir in wiki_dirs:
+            candidate = os.path.join(wiki_dir, f"verification_{session_id}.json")
+            if os.path.exists(candidate):
+                verification_file = candidate
+                break
+        
+        if not verification_file:
+            raise HTTPException(
+                status_code=404,
+                detail=f"未找到验证文件 for session {session_id}"
+            )
+        
+        with open(verification_file, "r", encoding="utf-8") as f:
+            verification_data = json.load(f)
+        
+        return VerificationStatusResponse(
+            session_id=session_id,
+            status=verification_data.get("status", "pending"),
+            generated_files=verification_data.get("generated_files", {}),
+            available_sections=verification_data.get("available_sections", []),
+            user_selected_sections=verification_data.get("user_selected_sections", []),
+            user_notes=verification_data.get("user_notes", ""),
+            generated_at=verification_data.get("generated_at", ""),
+            requires_action=verification_data.get("status") == "pending"
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取验证状态失败: {str(e)}"
+        )
+
+@router.post("/verification/confirm", response_model=VerificationResponse)
+async def confirm_verification(request: VerificationRequest):
+    """
+    确认验证并继续工作流
+    """
+    try:
+        # 查找验证文件
+        verification_file = None
+        wiki_dirs = ["wiki", "/root/project/git/project-agent/wiki"]
+        
+        for wiki_dir in wiki_dirs:
+            candidate = os.path.join(wiki_dir, f"verification_{request.session_id}.json")
+            if os.path.exists(candidate):
+                verification_file = candidate
+                break
+        
+        if not verification_file:
+            raise HTTPException(
+                status_code=404,
+                detail=f"未找到验证文件 for session {request.session_id}"
+            )
+        
+        # 读取并更新验证数据
+        with open(verification_file, "r", encoding="utf-8") as f:
+            verification_data = json.load(f)
+        
+        verification_data["status"] = request.status
+        verification_data["user_selected_sections"] = request.selected_sections or []
+        verification_data["user_notes"] = request.notes or ""
+        verification_data["confirmed_at"] = datetime.now().isoformat()
+        
+        # 保存更新
+        with open(verification_file, "w", encoding="utf-8") as f:
+            json.dump(verification_data, f, ensure_ascii=False, indent=2)
+        
+        return VerificationResponse(
+            success=True,
+            message=f"验证状态已更新为: {request.status}",
+            verification_file=verification_file,
+            status=request.status
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"确认验证失败: {str(e)}"
+        )
+
+@router.get("/verification/files/{session_id}")
+async def get_verification_files(session_id: str):
+    """
+    获取验证相关的文件内容
+    """
+    try:
+        # 获取验证状态
+        status_response = await get_verification_status(session_id)
+        
+        files_content = {}
+        
+        # 读取投标文件骨架
+        bid_skeleton_path = status_response.generated_files.get("bid_skeleton")
+        if bid_skeleton_path and os.path.exists(bid_skeleton_path):
+            with open(bid_skeleton_path, "r", encoding="utf-8") as f:
+                files_content["bid_skeleton"] = f.read()
+        
+        # 读取技术规格书
+        tech_spec_path = status_response.generated_files.get("tech_spec")
+        if tech_spec_path and os.path.exists(tech_spec_path):
+            with open(tech_spec_path, "r", encoding="utf-8") as f:
+                files_content["tech_spec"] = f.read()
+        
+        # 读取招标文件
+        tender_file_path = status_response.generated_files.get("tender_file")
+        if tender_file_path and os.path.exists(tender_file_path):
+            with open(tender_file_path, "r", encoding="utf-8") as f:
+                files_content["tender_file"] = f.read()
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "files": files_content,
+            "available_sections": status_response.available_sections
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取文件内容失败: {str(e)}"
+        )

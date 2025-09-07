@@ -107,7 +107,7 @@ def extract_bid_format_section(md: str, user_hint: Optional[str] = None, drop_he
     section = _norm(md)[start:end]
     if drop_heading:
         section = strip_first_heading(section)
-    # 进一步清理所有可能残留的“第X章 ...”行
+    # 进一步清理所有可能残留的"第X章 ..."行
     section = remove_all_chapter_headings(section)
     toc = outline(section, 2, 6)   # 统计二级及以下标题
     return section, toc
@@ -185,9 +185,18 @@ def _is_toc_line(line: str) -> bool:
         return True
     is_md_link = s.startswith("**[") and "](" in s
     is_anchor_link = s.startswith("[") and "](#" in s
+    # 明显"目录"行，且带链接/页码点线时，更像 TOC
+>>>>>>> c9213e8 (修改部分流程)
+    if ("目录" in s) and ("." in s or ". ." in s or "](" in s):
+        return True
     if is_md_link or is_anchor_link:
         return True
-    # 明显“目录”行，且带链接/页码点线时，更像 TOC
+    # 明显"目录"行，且带链接/页码点线时，更像 TOC
+    if ("目录" in s) and ("." in s or ". ." in s or "](" in s):
+        return True
+=======
+    # 明显"目录"行，且带链接/页码点线时，更像 TOC
+>>>>>>> c9213e8 (修改部分流程)
     if ("目录" in s) and (".." in s or ". ." in s or "](" in s):
         return True
     return False
@@ -268,7 +277,11 @@ def extract_tech_spec_section(md_text: str, include_heading: bool = True) -> Opt
             if state == "IN_TECH":
                 buf.append(ln)
 
+
+>>>>>>> c9213e8 (修改部分流程)
     if not captured:
         return None
     return "\n".join(buf).strip("\n")
+=======
 
+>>>>>>> c9213e8 (修改部分流程)

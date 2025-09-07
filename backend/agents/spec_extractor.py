@@ -24,8 +24,15 @@ class SpecExtractor(BaseAgent):
     def get_system_prompt(self) -> str:
         return "你是技术规格书提取专家，从招标文件中精确提取技术要求和规格书内容。"
 
+        from utils.extract_bid_section import extract_tech_spec_section
+>>>>>>> c9213e8 (修改部分流程)
+        section = extract_tech_spec_section(text, include_heading=True)
     def _slice(self, text: str):
         """优先使用通用状态机；失败再用旧模式回退切片。"""
+        section = extract_tech_spec_section(text, include_heading=True)
+=======
+        from utils.extract_bid_section import extract_tech_spec_section
+>>>>>>> c9213e8 (修改部分流程)
         section = extract_tech_spec_section(text, include_heading=True)
         if section:
             # 返回切片位置以兼容后续逻辑（仅内部使用，外部直接写入 section）
@@ -86,8 +93,15 @@ class SpecExtractor(BaseAgent):
         if s is not None and e is not None and s >= 0:
             payload = text[s:e].strip()
             extracted = True
+            from utils.extract_bid_section import extract_tech_spec_section
+>>>>>>> c9213e8 (修改部分流程)
+            direct = extract_tech_spec_section(text, include_heading=True)
         else:
             # 再尝试直接拿状态机文本（避免切片定位失败，但已抽到文本的情况）
+            direct = extract_tech_spec_section(text, include_heading=True)
+=======
+            from utils.extract_bid_section import extract_tech_spec_section
+>>>>>>> c9213e8 (修改部分流程)
             direct = extract_tech_spec_section(text, include_heading=True)
             if direct:
                 payload = direct.strip()

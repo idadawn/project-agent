@@ -29,8 +29,8 @@ class BidState(TypedDict, total=False):
     bid_md_path: str          # /wiki/投标文件.md（你已有）
     outline_path: str         # /wiki/投标文件_骨架.md
     spec_path: str            # /wiki/技术规格书_提取.md
-    plan_path: str            # /wiki/方案_提纲.md
-    plan_draft_path: str      # /wiki/方案_草稿.md
+    plan_path: str            # /wiki/技术方案.md（原 方案_提纲.md）
+    plan_draft_path: str      # /wiki/技术方案_草稿.md（原 方案_草稿.md）
     draft_path: str           # /wiki/投标文件_草案.md
     final_bid_path: str       # /wiki/投标文件.md
     diff_table_path: str      # /wiki/偏差表.md
@@ -43,6 +43,14 @@ class BidState(TypedDict, total=False):
     sanity_report_path: str   # 校验报告路径
     compliance_report: Dict[str, Any]
     compliance_report_path: str
+    # 用户确认状态
+    outline_confirmed: bool   # 招标文件骨架是否确认
+    spec_confirmed: bool      # 技术规格书是否确认
+    plan_confirmed: bool      # 方案提纲是否确认
+    user_input: str           # 用户输入的方案要求
+    solution_requirements: str  # 用户输入的技术方案需求（新）
+    current_step: str         # 当前步骤
+    waiting_for_confirmation: bool  # 是否等待用户确认
 
 
 class ProposalPlan(BaseModel):

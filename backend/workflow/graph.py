@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 from agents.coordinator import CoordinatorAgent
 from agents.document_parser import DocumentParserAgent
 from agents.base import AgentContext
-from workflow.bid_build_graph import run_build_async
+from workflow.bid_build_graph import run_build_async, run_build_sequential_async
 
 
 class ProposalWorkflow:
@@ -183,8 +183,8 @@ class ProposalWorkflow:
         mapping = [
             ("outline_path",       "投标文件_骨架.md"),
             ("spec_path",          "技术规格书_提取.md"),
-            ("plan_path",          "方案_提纲.md"),
-            ("plan_draft_path",    "投标文件_草案.md"),
+            ("plan_path",          "技术方案.md"),
+            ("plan_draft_path",    "技术方案_草稿.md"),
             ("draft_path",         "投标文件_草案.md"),
             ("sanity_report_path", "一致性检查报告.md"),
         ]
@@ -267,8 +267,8 @@ class ProposalWorkflow:
             
             print(f"DEBUG: Starting A-E workflow for session: {session_id}")
             
-            # 调用 A-E 工作流
-            result = await run_build_async(
+            # 调用 A-E 工作流（非交互/批处理优先顺序执行以规避图递归）
+            result = await run_build_sequential_async(
                 session_id=session_id,
                 uploaded_files=uploaded_files,
                 wiki_dir=wiki_dir,
@@ -293,8 +293,8 @@ class ProposalWorkflow:
             created = [
                 ("投标文件_骨架.md", result.get("outline_path")),
                 ("技术规格书_提取.md", result.get("spec_path")),
-                ("方案_提纲.md", result.get("plan_path")),
-                ("方案_草稿.md", result.get("plan_draft_path")),
+                ("技术方案.md", result.get("plan_path")),
+                ("技术方案_草稿.md", result.get("plan_draft_path")),
                 ("投标文件_草案.md", result.get("draft_path")),
                 ("sanity_report.json", result.get("sanity_report_path")),
             ]
