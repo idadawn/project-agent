@@ -13,9 +13,6 @@ def build_proposal(payload: dict = Body(...)):
     result = run_build(session_id, tender_path, wiki_dir, meta)
     return {
         "ok": True,
-        "draft_path": result.get("draft_path"),
         "outline_path": result.get("outline_path"),
         "spec_path": result.get("spec_path"),
-        "plan_path": result.get("plan_path"),
-        "sanity_report": result.get("sanity_report"),
     }

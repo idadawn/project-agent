@@ -16,23 +16,20 @@ class CoordinatorAgent(BaseAgent):
 📋 **核心职责**：
 1. **会话管理**: 与用户进行自然语言对话，协调整个招标文件处理流程
 2. **意图识别与任务分派**: 分析用户需求，判断是否需要处理招标文件
-3. **A-E工作流协调**: 管理最小落地版A-E流程的完整执行
+3. **工作流协调**: 管理结构抽取与技术规格提取流程的执行
 4. **状态管理**: 维护文件处理状态，更新项目进度
 5. **用户交互**: 引导用户确认流程节点，收集反馈和修改意见
 
-🤖 **A-E专业智能体团队**：
+🤖 **智能体团队**：
 - 🏗️ **A - StructureExtractor**: 结构抽取，从招标文件提取投标文件格式要求，生成投标文件骨架
 - 📋 **B - SpecExtractor**: 技术规格书抽取，精准定位并提取第四章技术规格书内容
-- 📝 **C - PlanOutliner**: 方案提纲生成，根据技术规格书生成技术方案和施工方法的详细提纲
-- 🔧 **D - BidAssembler**: 投标文件拼装，将骨架、方案提纲和技术规格书进行智能拼装生成草案
-- ✅ **E - SanityChecker**: 完整性校验，检查投标文件草案的完整性和合规性
 
-💼 **A-E工作流程**：
-A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼装草案 → E：完整性校验
+💼 **当前工作流程**：
+A：结构抽取 → B：技术规格书
 
 📊 **状态管理**：使用 ✅已完成、🚧进行中、⏳待处理 来标记任务状态
 
-🎯 **目标**: 通过A-E工作流帮助用户高效处理招标文件，自动生成专业的投标方案。"""
+🎯 **目标**: 通过该工作流帮助用户高效处理招标文件，生成基础的投标文件骨架和技术规格书。"""
     
     async def execute(self, context: AgentContext) -> AgentResponse:
         try:
@@ -45,9 +42,9 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
             # 根据当前阶段决定下一步行动
             if current_stage == "initial":
                 return await self._handle_initial_request(context)
-            elif current_stage == "parsing_requested":
-                # 处理文档解析请求，明确清除此状态并推进
-                context.project_state["current_stage"] = "document_parsing"  # 立即推进状态
+            elif current_stage in ("parsing_requested", "parsing_completed"):
+                # 处理文档解析请求或解析完成后继续执行工作流
+                context.project_state["current_stage"] = "document_parsing" if current_stage == "parsing_requested" else current_stage
                 return await self._coordinate_bid_build(context)
             else:
                 return await self._handle_general_coordination(context)
@@ -84,7 +81,7 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
         analysis = await self._analyze_user_request(context)
         
         if analysis["action"] in ["process_bidding_documents", "process_documents"]:
-            # 开始招标文件处理流程，直接触发A-E工作流
+            # 开始招标文件处理流程，直接触发工作流
             return await self._coordinate_bid_build(context)
         else:
             # 一般对话处理
@@ -95,7 +92,7 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
         user_text = (context.user_input or "").strip()
         current_stage = context.project_state.get("current_stage", "initial")
         
-        # 触发词：继续执行/开始/执行/生成模板 → 直接推进到A-E工作流
+        # 触发词：继续执行/开始/执行/生成模板 → 直接推进到工作流
         trigger_keywords = ["继续", "继续执行", "开始", "执行", "生成模板"]
         if any(k in user_text for k in trigger_keywords):
             return await self._coordinate_bid_build(context)
@@ -117,7 +114,7 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
         )
 
     async def _coordinate_bid_build(self, context: AgentContext) -> AgentResponse:
-        """协调最小落地版 A–E 工作流（结构→规格→提纲→拼装→校验）"""
+        """协调简化版工作流（结构→规格）"""
         context.project_state = context.project_state or {}
         
         # 检查是否有上传文件且未进行文档解析
@@ -140,7 +137,7 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
             
             # 返回解析结果，让用户知道文档已解析完成
             return AgentResponse(
-                content=parse_result.content + "\n\n🚀 **接下来将启动A-E工作流进行投标文件生成...**",
+                content=parse_result.content + "\n\n🚀 **接下来将启动工作流进行投标文件生成...**",
                 metadata={
                     "current_agent": "document_parser",
                     "stage": "parsing_completed",  # 使用完成状态而不是进行中状态
@@ -151,8 +148,8 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
                 next_actions=[]  # 清空next_actions避免继续循环
             )
         
-        # 如果没有上传文件，直接使用默认模板执行A-E工作流
-        # 优先使用文档解析产出的标准路径；若不存在，则依然允许A–E以兜底模板运行
+        # 如果没有上传文件，直接使用默认模板执行工作流
+        # 优先使用文档解析产出的标准路径；若不存在，则依然允许流程以兜底模板运行
         from app_core.config import settings
         tender_path = (
             (context.project_state or {}).get("tender_path")
@@ -167,10 +164,6 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
             context.project_state.update({
                 "outline_path": result.get("outline_path"),
                 "spec_path": result.get("spec_path"),
-                "plan_path": result.get("plan_path"),
-                "plan_draft_path": result.get("plan_draft_path"),
-                "draft_path": result.get("draft_path"),
-                "sanity_report_path": result.get("sanity_report_path"),
                 "current_stage": "bid_build_completed",
             })
 
@@ -178,13 +171,9 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
             created = [
                 ("投标文件_骨架.md", result.get("outline_path")),
                 ("技术规格书_提取.md", result.get("spec_path")),
-                ("方案_提纲.md", result.get("plan_path")),
-                ("方案_草稿.md", result.get("plan_draft_path")),
-                ("投标文件_草案.md", result.get("draft_path")),
-                ("sanity_report.json", result.get("sanity_report_path")),
             ]
             lines = [f"- {name}: {path}" for name, path in created if path]
-            msg = "\n".join(["✅ 已完成最小链路（A–E）生成以下文件:"] + lines)
+            msg = "\n".join(["✅ 已生成以下文件:"] + lines)
 
             return AgentResponse(
                 content=msg,
@@ -198,7 +187,7 @@ A：结构抽取 → B：技术规格书 → C：方案提纲/草稿 → D：拼
         except Exception as e:
             context.project_state["current_stage"] = "bid_build_failed"
             return AgentResponse(
-                content=f"❌ A–E 工作流执行失败: {str(e)}",
+                content=f"❌ 工作流执行失败: {str(e)}",
                 metadata={
                     "current_agent": "coordinator",
                     "stage": "bid_build_failed",
