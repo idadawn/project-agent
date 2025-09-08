@@ -42,9 +42,9 @@ A：结构抽取 → B：技术规格书
             # 根据当前阶段决定下一步行动
             if current_stage == "initial":
                 return await self._handle_initial_request(context)
-            elif current_stage == "parsing_requested":
-                # 处理文档解析请求，明确清除此状态并推进
-                context.project_state["current_stage"] = "document_parsing"  # 立即推进状态
+            elif current_stage in ("parsing_requested", "parsing_completed"):
+                # 处理文档解析请求或解析完成后继续执行工作流
+                context.project_state["current_stage"] = "document_parsing" if current_stage == "parsing_requested" else current_stage
                 return await self._coordinate_bid_build(context)
             else:
                 return await self._handle_general_coordination(context)
