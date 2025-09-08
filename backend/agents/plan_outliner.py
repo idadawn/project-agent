@@ -1,5 +1,5 @@
 # backend/agents/plan_outliner.py
-from typing import Dict, Any
+from typing import Dict, Any, List
 import os, pathlib, datetime
 
 try:

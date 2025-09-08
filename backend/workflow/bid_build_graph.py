@@ -5,7 +5,7 @@ from agents.spec_extractor import SpecExtractor
 
 
 def build_bid_graph():
-    """构建简化版工作流：结构抽取→规格提取"""
+    """构建交互式最小工作流：结构抽取 → 规格提取（仅到此为止）"""
     graph = StateGraph(BidState)
 
     structure_extractor = StructureExtractor()
@@ -119,7 +119,7 @@ async def run_build_async(session_id: str, uploaded_files: list, wiki_dir="wiki"
 
 
 async def run_build_sequential_async(session_id: str, uploaded_files: list, wiki_dir="wiki", meta=None, interactive: bool = False, auto_confirm: bool = True) -> dict:
-    """顺序执行版工作流，避免图递归导致的上限问题。"""
+    """顺序执行版工作流（仅执行到结构与规格），避免图递归上限。"""
     state = BidState({
         "session_id": session_id,
         "uploaded_files": uploaded_files,
@@ -146,6 +146,7 @@ async def run_build_sequential_async(session_id: str, uploaded_files: list, wiki
         return state
     state["spec_confirmed"] = True
 
+    # 到此为止：不在此处自动生成技术方案/草案/一致性报告
     return {
         "outline_path": state.get("outline_path"),
         "spec_path": state.get("spec_path"),

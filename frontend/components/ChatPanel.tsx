@@ -84,9 +84,6 @@ export function ChatPanel({
     { id: 'document_parsing', name: '文档解析', description: '解析招标文件', agent: 'coordinator', icon: 'FileText', agentKey: 'coordinator' },
     { id: 'structure_extraction', name: 'A-结构抽取', description: '提取投标文件格式要求', agent: 'StructureExtractor', icon: 'Search', agentKey: 'structure_extractor' },
     { id: 'spec_extraction', name: 'B-规格书提取', description: '提取技术规格书', agent: 'SpecExtractor', icon: 'FileText', agentKey: 'spec_extractor' },
-    { id: 'plan_outlining', name: 'C-方案提纲生成', description: '生成投标方案提纲', agent: 'PlanOutliner', icon: 'Edit', agentKey: 'plan_outliner' },
-    { id: 'bid_assembly', name: 'D-草案拼装', description: '拼装投标文件', agent: 'BidAssembler', icon: 'Puzzle', agentKey: 'bid_assembler' },
-    { id: 'sanity_check', name: 'E-完整性校验', description: '校验完整性', agent: 'SanityChecker', icon: 'CheckSquare', agentKey: 'sanity_checker' }
   ]
 
   // 获取图标组件
@@ -161,7 +158,7 @@ export function ChatPanel({
           metadata.stage === 'bid_build_completed' ||
           metadata.action === 'bid_build_completed') {
         return {
-          agent: 'sanity_checker', // 最后一步是完整性校验
+          agent: 'spec_extractor', // 新流程以规格提取完成为止
           status: 'completed',
           action: 'bid_build_completed'
         }
@@ -310,7 +307,7 @@ export function ChatPanel({
             </div>
             <div>
               <h3 className="font-bold text-blue-900 text-lg">🤖 智能体执行流水线</h3>
-              <p className="text-sm text-blue-700">正在执行 A-E 工作流，请稍候...</p>
+              <p className="text-sm text-blue-700">正在执行最小工作流（解析→结构→规格），请稍候...</p>
             </div>
           </div>
           <div className="text-right">
@@ -479,17 +476,17 @@ export function ChatPanel({
     return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`
   }
 
-  const getAgentDisplayName = (agent: string) => {
-    const names = {
-      'coordinator': '🤝 协调器',
-      'structure_extractor': '🔍 A-结构抽取',
-      'spec_extractor': '📄 B-规格提取',
-      'plan_outliner': '✏️ C-方案提纲',
-      'bid_assembler': '🧩 D-草案拼装',
-      'sanity_checker': '✅ E-完整性校验'
+    const getAgentDisplayName = (agent: string) => {
+      const names = {
+        'coordinator': '🤝 协调器',
+        'structure_extractor': '🔍 A-结构抽取',
+        'spec_extractor': '📄 B-规格提取',
+        'plan_outliner': '✏️ C-方案提纲',
+        'bid_assembler': '🧩 D-草案拼装',
+        'sanity_checker': '✅ E-完整性校验'
+      }
+      return names[agent as keyof typeof names] || agent
     }
-    return names[agent as keyof typeof names] || agent
-  }
 
   const getActionDisplayName = (action: string) => {
     const actions = {

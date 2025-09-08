@@ -303,6 +303,18 @@ class DocumentParserAgent(BaseAgent):
                 for page_num, page in enumerate(pdf_reader.pages):
                     text_content += f"\n--- 第 {page_num + 1} 页 ---\n"
                     text_content += page.extract_text()
+                # 将提取的文本保存为基础 Markdown，便于后续 A–E 流程继续
+                parsed_dir = "/root/project/git/project-agent/wiki"
+                os.makedirs(parsed_dir, exist_ok=True)
+                base_name = "招标文件.md"
+                md_path = os.path.join(parsed_dir, base_name)
+                # 基础 Markdown 内容（加入简单标题，确保可读性）
+                fallback_md = f"# 招标文件\n\n{text_content}"
+                with open(md_path, 'w', encoding='utf-8') as f:
+                    f.write(fallback_md)
+                self.logger.info(f"[Fallback] PDF->MD created: {md_path} (chars={len(fallback_md)})")
+                created_md = {"name": base_name, "content": fallback_md, "type": "wiki", "folder": "parsed"}
+
                 structure = await self._analyze_document_structure(text_content, filename)
                 return ({
                     "filename": filename,
@@ -313,7 +325,7 @@ class DocumentParserAgent(BaseAgent):
                         "file_size": os.path.getsize(file_path),
                         "raw_text": text_content[:5000]
                     }
-                }, {})
+                }, created_md)
         except Exception as e:
             raise Exception(f"PDF解析失败: {str(e)}")
     
@@ -356,6 +368,17 @@ class DocumentParserAgent(BaseAgent):
                 import docx
                 doc = docx.Document(file_path)
                 text_content = "\n".join(p.text for p in doc.paragraphs)
+                # 将提取的文本保存为基础 Markdown，便于后续 A–E 流程继续
+                parsed_dir = "/root/project/git/project-agent/wiki"
+                os.makedirs(parsed_dir, exist_ok=True)
+                base_name = "招标文件.md"
+                md_path = os.path.join(parsed_dir, base_name)
+                fallback_md = f"# 招标文件\n\n{text_content}"
+                with open(md_path, 'w', encoding='utf-8') as f:
+                    f.write(fallback_md)
+                self.logger.info(f"[Fallback] DOCX->MD created: {md_path} (chars={len(fallback_md)})")
+                created_md = {"name": base_name, "content": fallback_md, "type": "wiki", "folder": "parsed"}
+
                 structure = await self._analyze_document_structure(text_content, filename)
                 return ({
                     "filename": filename,
@@ -366,7 +389,7 @@ class DocumentParserAgent(BaseAgent):
                         "file_size": os.path.getsize(file_path),
                         "raw_text": text_content[:5000]
                     }
-                }, {})
+                }, created_md)
             except ImportError:
                 self.logger.warning("python-docx not available, creating basic structure")
                 return ({
@@ -437,7 +460,17 @@ class DocumentParserAgent(BaseAgent):
                     "page": "N/A",
                     "subsections": []
                 }]
-            
+            # 同步生成基础 Markdown，确保后续流程可用
+            parsed_dir = "/root/project/git/project-agent/wiki"
+            os.makedirs(parsed_dir, exist_ok=True)
+            base_name = "招标文件.md"
+            md_path = os.path.join(parsed_dir, base_name)
+            fallback_md = f"# 招标文件\n\n{text_content}"
+            with open(md_path, 'w', encoding='utf-8') as f:
+                f.write(fallback_md)
+            self.logger.info(f"[Fallback] TXT->MD created: {md_path} (chars={len(fallback_md)})")
+            created_md = {"name": base_name, "content": fallback_md, "type": "wiki", "folder": "parsed"}
+
             return ({
                 "filename": filename,
                 "document_type": "TXT招标文件",
@@ -446,7 +479,7 @@ class DocumentParserAgent(BaseAgent):
                     "file_size": os.path.getsize(file_path),
                     "raw_text": text_content[:1000] + "..." if len(text_content) > 1000 else text_content
                 }
-            }, {})
+            }, created_md)
         except Exception as e:
             raise Exception(f"TXT解析失败: {str(e)}")
 

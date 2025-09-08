@@ -32,6 +32,8 @@ def _ensure_session(session_id: Optional[str]) -> str:
 
 def _summarize_state(state: Dict[str, Any]) -> Dict[str, Any]:
     return {
+        "tender_path": state.get("tender_path"),
+        "tender_confirmed": state.get("tender_confirmed"),
         "outline_path": state.get("outline_path"),
         "spec_path": state.get("spec_path"),
         "outline_confirmed": state.get("outline_confirmed"),
@@ -50,6 +52,7 @@ class StartWorkflowRequest(BaseModel):
     interactive: bool = False
     auto_confirm: bool = True
     recursion_limit: int = 50
+    tender_confirmed: Optional[bool] = None
 
 
 class StartWorkflowResponse(BaseModel):
@@ -61,6 +64,7 @@ class StartWorkflowResponse(BaseModel):
 
 class ContinueWorkflowRequest(BaseModel):
     session_id: str
+    tender_confirmed: Optional[bool] = None
     outline_confirmed: Optional[bool] = None
     spec_confirmed: Optional[bool] = None
 
@@ -75,6 +79,16 @@ class ContinueWorkflowResponse(BaseModel):
 async def _run_interactive_until_pause(state: Dict[str, Any]) -> Dict[str, Any]:
     """顺序执行各个 agent；遇到需要确认或输入时暂停返回当前状态。"""
     interactive = state.get("interactive", False)
+
+    # 0) 招标文件（解析产物）确认
+    # 若存在 wiki/招标文件.md（或 tender_path 指向该文件），交互模式下要求用户确认
+    if interactive and not state.get("tender_confirmed"):
+        from pathlib import Path
+        tender_path = state.get("tender_path") or (Path(state.get("wiki_dir", "wiki")) / "招标文件.md")
+        if tender_path and Path(tender_path).exists():
+            state["waiting_for_confirmation"] = True
+            state["current_step"] = "tender_confirmation"
+            return state
 
     # 1) 结构抽取
     if not state.get("outline_path"):
@@ -120,6 +134,7 @@ async def start_workflow(request: StartWorkflowRequest):
             "meta": request.meta or {},
             "interactive": bool(request.interactive),
             "auto_confirm": bool(request.auto_confirm),
+            "tender_confirmed": request.tender_confirmed,
         })
 
         # 非交互：直接顺序执行结构与规格提取（避免图递归）
@@ -160,6 +175,8 @@ async def continue_workflow(request: ContinueWorkflowRequest):
         state = SESSION_STORE[request.session_id]
 
         # 应用用户确认或输入
+        if request.tender_confirmed is not None:
+            state["tender_confirmed"] = bool(request.tender_confirmed)
         if request.outline_confirmed is not None:
             state["outline_confirmed"] = bool(request.outline_confirmed)
         if request.spec_confirmed is not None:

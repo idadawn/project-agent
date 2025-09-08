@@ -179,14 +179,10 @@ class ProposalWorkflow:
         # 仅追加
         outputs = state.setdefault("files_to_create", [])
 
-        # 产物键 → 展示名
+        # 仅注册当前阶段需要的三个文件
         mapping = [
             ("outline_path",       "投标文件_骨架.md"),
             ("spec_path",          "技术规格书_提取.md"),
-            ("plan_path",          "技术方案.md"),
-            ("plan_draft_path",    "技术方案_草稿.md"),
-            ("draft_path",         "投标文件_草案.md"),
-            ("sanity_report_path", "一致性检查报告.md"),
         ]
 
         # 原始招标MD（如有且为md）也可回传便于检查/引用
@@ -279,10 +275,7 @@ class ProposalWorkflow:
             state.update({
                 "outline_path": result.get("outline_path"),
                 "spec_path": result.get("spec_path"),
-                "plan_path": result.get("plan_path"),
-                "plan_draft_path": result.get("plan_draft_path"),
-                "draft_path": result.get("draft_path"),
-                "sanity_report_path": result.get("sanity_report_path"),
+                # 不在此处生成 plan/draft/sanity
                 "current_stage": "bid_build_completed",
             })
             
@@ -291,15 +284,22 @@ class ProposalWorkflow:
             
             # 生成用户提示
             created = [
+                ("招标文件.md", state.get("tender_path")),
                 ("投标文件_骨架.md", result.get("outline_path")),
                 ("技术规格书_提取.md", result.get("spec_path")),
-                ("技术方案.md", result.get("plan_path")),
-                ("技术方案_草稿.md", result.get("plan_draft_path")),
-                ("投标文件_草案.md", result.get("draft_path")),
-                ("sanity_report.json", result.get("sanity_report_path")),
             ]
             lines = [f"- {name}: {path}" for name, path in created if path]
-            msg = "\n".join(["✅ 已完成A–E链路生成以下文件:"] + lines)
+            msg = "\n".join([
+                "✅ 已生成基础文件（未生成技术方案/草案/报告）：",
+                *lines,
+                "",
+                "请确认以上文件是否准确：",
+                "- 回复“确认招标文件”以确认 招标文件.md",
+                "- 回复“确认骨架”以确认 投标文件_骨架.md",
+                "- 回复“确认规格书”以确认 技术规格书_提取.md",
+                "",
+                "确认后，请在对话中输入您的具体要求（如技术路线、设备品牌、工期目标等），我将基于 技术规格书_提取.md 为核心、参考 招标文件.md 生成 技术方案.md。",
+            ])
             
             return AgentResponse(
                 content=msg,

@@ -3,6 +3,7 @@ import json
 import asyncio
 from .base import BaseAgent, AgentContext, AgentResponse
 from workflow.bid_build_graph import run_build
+from agents.plan_outliner import PlanOutliner
 
 
 class CoordinatorAgent(BaseAgent):
@@ -42,9 +43,9 @@ A：结构抽取 → B：技术规格书
             # 根据当前阶段决定下一步行动
             if current_stage == "initial":
                 return await self._handle_initial_request(context)
-            elif current_stage == "parsing_requested":
-                # 处理文档解析请求，明确清除此状态并推进
-                context.project_state["current_stage"] = "document_parsing"  # 立即推进状态
+            elif current_stage in ("parsing_requested", "parsing_completed"):
+                # 处理文档解析请求或解析完成后继续执行工作流
+                context.project_state["current_stage"] = "document_parsing" if current_stage == "parsing_requested" else current_stage
                 return await self._coordinate_bid_build(context)
             else:
                 return await self._handle_general_coordination(context)
@@ -91,7 +92,27 @@ A：结构抽取 → B：技术规格书
         """处理一般性协调请求"""
         user_text = (context.user_input or "").strip()
         current_stage = context.project_state.get("current_stage", "initial")
-        
+
+        # 简易确认语义：允许用户在对话中确认各阶段产物
+        confirm_map = {
+            "确认招标文件": ("tender_confirmed", True),
+            "确认骨架": ("outline_confirmed", True),
+            "确认规格书": ("spec_confirmed", True),
+        }
+        for kw, (key, val) in confirm_map.items():
+            if kw in user_text:
+                context.project_state[key] = val
+                return AgentResponse(
+                    content=f"✅ 已设置 {key} = {val}。可继续下一步。",
+                    metadata={"current_agent": "coordinator", "stage": context.project_state.get("current_stage", "general_coordination")},
+                    next_actions=["await_user_input"],
+                )
+
+        # 明确的“生成技术方案”意图
+        plan_triggers = ["技术方案", "生成方案", "编写方案", "生成技术方案", "方案编写"]
+        if any(k in user_text for k in plan_triggers):
+            return await self._handle_plan_request(context)
+
         # 触发词：继续执行/开始/执行/生成模板 → 直接推进到工作流
         trigger_keywords = ["继续", "继续执行", "开始", "执行", "生成模板"]
         if any(k in user_text for k in trigger_keywords):
@@ -111,6 +132,100 @@ A：结构抽取 → B：技术规格书
                 "stage": md_stage  # 使用保护后的阶段
             },
             next_actions=["await_user_input"]
+        )
+
+    async def _handle_plan_request(self, context: AgentContext) -> AgentResponse:
+        """根据规格书和用户要求生成技术方案（仅生成 技术方案.md，不再自动拼装或校验）"""
+        # 确保已具备基础产物（骨架与规格书）
+        from app_core.config import settings
+        wiki_dir = settings.WIKI_DIR
+        tender_path = (context.project_state or {}).get("tender_path")
+
+        # 如未提取过结构与规格书，则先执行简化工作流
+        outline_path = (context.project_state or {}).get("outline_path")
+        spec_path = (context.project_state or {}).get("spec_path")
+        if not (outline_path and spec_path):
+            # 若还没解析过，但上传了文件，则先调用解析器
+            if context.uploaded_files and not tender_path:
+                from .document_parser import DocumentParserAgent
+                parser = DocumentParserAgent()
+                parse_result = await parser.execute(context)
+                if parse_result and parse_result.metadata.get("tender_path"):
+                    tender_path = parse_result.metadata.get("tender_path")
+                    context.project_state["tender_path"] = tender_path
+                    context.project_state.setdefault("files_to_create", []).extend(
+                        parse_result.metadata.get("files_to_create", [])
+                    )
+            try:
+                rb = run_build(
+                    session_id=context.project_state.get("session_id", "coordinator-session"),
+                    tender_path=tender_path or settings.TENDER_DEFAULT_PATH,
+                    wiki_dir=wiki_dir,
+                    meta=context.project_state.get("meta", {})
+                )
+                outline_path = rb.get("outline_path")
+                spec_path = rb.get("spec_path")
+                context.project_state.update({
+                    "outline_path": outline_path,
+                    "spec_path": spec_path,
+                })
+            except Exception as e:
+                return AgentResponse(
+                    content=f"无法生成技术方案：前置产物缺失且构建失败（{e}）",
+                    status="error",
+                    metadata={"current_agent": "coordinator", "stage": "failed"}
+                )
+
+        # 生成技术方案（核心依据：技术规格书_提取.md；参考：招标文件.md）
+        st = {
+            "wiki_dir": wiki_dir,
+            "spec_path": spec_path,
+            "tender_path": tender_path or settings.TENDER_DEFAULT_PATH,
+            "user_input": context.user_input,
+            "meta": context.project_state.get("meta", {}),
+        }
+        st = PlanOutliner().execute(st)
+        plan_path = st.get("plan_path")
+
+        # 回写状态
+        context.project_state.update({
+            "plan_path": plan_path,
+            "current_stage": "plan_created",
+        })
+
+        created_lines = []
+        if outline_path:
+            created_lines.append(f"- 投标文件_骨架.md: {outline_path}")
+        if spec_path:
+            created_lines.append(f"- 技术规格书_提取.md: {spec_path}")
+        if plan_path:
+            created_lines.append(f"- 技术方案.md: {plan_path}")
+        msg = "\n".join([
+            "🛠️ 已根据您的要求生成技术方案：",
+            *created_lines,
+            "\n请先检查：",
+            "1) 招标文件.md 是否正确（如需更换，请重新上传并输入“重新生成”）",
+            "2) 投标文件_骨架.md 是否符合格式要求（回复“确认骨架”继续）",
+            "3) 技术规格书_提取.md 是否准确（回复“确认规格书”继续）",
+            "4) 若需要按特定要求调整方案，请直接说明，我会重新生成对应部分。",
+        ])
+
+        files_created = [
+            {"name": "投标文件_骨架.md", "path": outline_path} if outline_path else None,
+            {"name": "技术规格书_提取.md", "path": spec_path} if spec_path else None,
+            {"name": "技术方案.md", "path": plan_path} if plan_path else None,
+        ]
+        files_created = [f for f in files_created if f]
+
+        return AgentResponse(
+            content=msg,
+            metadata={
+                "current_agent": "coordinator",
+                "stage": "plan_created",
+                "action": "plan_created",
+                "files_to_create": files_created,
+            },
+            next_actions=[],
         )
 
     async def _coordinate_bid_build(self, context: AgentContext) -> AgentResponse:
